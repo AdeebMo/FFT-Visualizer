@@ -1337,6 +1337,10 @@ function renderExplanation() {
 }
 
 function renderComparison() {
+  if (!dom.comparisonStatus || !dom.comparisonSummary || !dom.comparisonBody) {
+    return;
+  }
+
   dom.comparisonBody.innerHTML = "";
 
   if (!appState.comparison) {
