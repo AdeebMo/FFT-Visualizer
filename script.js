@@ -75,7 +75,7 @@ const LAB_MODES = {
   polynomial: {
     title: "Polynomial Multiplication Workbench",
     copy:
-      "Choose two polynomials, compare naive and FFT multiplication, and then inspect one pipeline phase at a time in the butterfly circuit.",
+      "Evaluate two polynomials, multiply their values pointwise, and inspect one pipeline phase at a time in the butterfly circuit.",
     visualizerKicker: "Polynomial Workbench",
     visualizerTitle: "Follow the polynomial multiplication pipeline in one shared FFT circuit",
     buildHelp:
@@ -86,7 +86,7 @@ const LAB_MODES = {
   frequency: {
     title: "Frequency / Transform Workbench",
     copy:
-      "Load one signal, build the trace, and watch the same butterfly circuit produce transform bins in the classic FFT interpretation.",
+      "Load one signal, build the trace, and watch the same butterfly circuit produce transform bins.",
     visualizerKicker: "Frequency Workbench",
     visualizerTitle: "Inspect the FFT as a staged transform circuit for one signal at a time",
     buildHelp:
@@ -1263,9 +1263,9 @@ function getActivePolynomialTraceSource() {
         direction: "forward",
         values: realCoefficientsToComplex(result.paddedA),
         labels: buildVisualizationLabels("A Coeffs", "a[i]", "A(omega^k)", "value form"),
-        previewTitle: "Forward FFT of Polynomial A is ready.",
+        previewTitle: "Forward FFT for polynomial A is ready.",
         previewCopy:
-          `Preview the ${result.paddedSize}-point circuit that evaluates Polynomial A at the chosen roots of unity.`,
+          `Preview the ${result.paddedSize}-point circuit evaluating A at roots of unity.`,
         statusText: "FFT(A) Ready"
       };
     case "fft-b":
@@ -1273,9 +1273,9 @@ function getActivePolynomialTraceSource() {
         direction: "forward",
         values: realCoefficientsToComplex(result.paddedB),
         labels: buildVisualizationLabels("B Coeffs", "b[i]", "B(omega^k)", "value form"),
-        previewTitle: "Forward FFT of Polynomial B is ready.",
+        previewTitle: "Forward FFT for polynomial B is ready.",
         previewCopy:
-          `Preview the ${result.paddedSize}-point circuit that evaluates Polynomial B at the same special points.`,
+          `Preview the ${result.paddedSize}-point circuit evaluating B at roots of unity.`,
         statusText: "FFT(B) Ready"
       };
     case "inverse":
@@ -1654,8 +1654,8 @@ function renderActionStrip() {
     }
 
     if (phase === "result") {
-      dom.actionTitle.textContent = "The final product coefficients are ready.";
-      dom.actionCopy.textContent = `After inverse FFT, the product coefficients are ${formatRealList(result.fftResult)}. This matches the naive convolution result.`;
+      dom.actionTitle.textContent = "Recovered coefficients.";
+      dom.actionCopy.textContent = "After the inverse FFT, remove extra zeros and small rounding errors to get the final product.";
       dom.actionPhase.textContent = "Phase: Final Coefficients";
       dom.actionStage.textContent = "Stage: output ready";
       dom.actionIndices.textContent = "Indices: coefficient positions";
@@ -1713,8 +1713,8 @@ function renderActionStrip() {
     return;
   }
 
-  dom.actionTitle.textContent = "Waiting for input.";
-  dom.actionCopy.textContent = "Enter a length-8 or length-16 signal to preview the circuit and build the trace.";
+  dom.actionTitle.textContent = "Enter a length-8 or length-16 signal to build the circuit and trace.";
+  dom.actionCopy.textContent = "Real and complex samples are both supported.";
   dom.actionPhase.textContent = "Phase: Idle";
   dom.actionStage.textContent = "Stage: --";
   dom.actionIndices.textContent = "Indices: --";
@@ -1805,7 +1805,7 @@ function renderExplanation() {
 
     if (!result) {
       dom.stepExplanation.textContent =
-        "Polynomial mode starts by comparing naive multiplication with FFT-based multiplication. Once both coefficient lists are valid, the app pads them, evaluates them, multiplies values pointwise, and interpolates the result.";
+        "Start by comparing naive multiplication with FFT-based multiplication. Then the app pads the coefficients, evaluates them, multiplies matching values, and interpolates the result.";
       dom.stepFormula.textContent = "Enter A(x) and B(x), then click Compare Naive vs FFT.";
       return;
     }
@@ -1819,14 +1819,14 @@ function renderExplanation() {
 
     if (phase === "pointwise") {
       dom.stepExplanation.textContent =
-        "Pointwise multiplication is the key simplification. After evaluation, coefficient convolution becomes simple entry-by-entry multiplication in value form.";
+        "Pointwise multiplication is the key simplification. In value form, matching entries multiply directly.";
       dom.stepFormula.textContent = "C(omega^k) = A(omega^k) * B(omega^k)";
       return;
     }
 
     if (phase === "result") {
       dom.stepExplanation.textContent =
-        "The inverse FFT returns to coefficient form. The last clean-up step trims extra zeros and rounds away tiny floating-point noise so the final polynomial is easy to read.";
+        "The inverse FFT returns to coefficient form. Then remove extra zeros and small rounding errors to get the final product.";
       dom.stepFormula.textContent = formatPolynomialExpression(result.fftResult);
       return;
     }
@@ -2272,8 +2272,8 @@ function renderVisualization() {
 
     if (appState.polynomial.selectedPhase === "result") {
       renderPolynomialRowsView(
-        "Recovered coefficient output",
-        "After inverse FFT, trim the extra zeros and round tiny noise to reveal the final product coefficients.",
+        "Recovered coefficients",
+        "After the inverse FFT, remove extra zeros and small rounding errors to get the final product.",
         [
           { label: "Coefficients", values: result.fftResult },
           { label: "Naive check", values: result.naiveResult }

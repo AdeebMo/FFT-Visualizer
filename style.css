@@ -422,43 +422,6 @@ code {
   min-height: 100%;
 }
 
-.lesson-banner {
-  padding: 18px 20px;
-  border-radius: var(--radius-md);
-  background:
-    radial-gradient(circle at top left, rgba(90, 169, 255, 0.14), transparent 42%),
-    rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(90, 169, 255, 0.18);
-  color: var(--text-secondary);
-}
-
-.butterfly-explain-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-}
-
-.stage-roadmap {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.stage-roadmap-card {
-  min-height: 100%;
-}
-
-.stage-roadmap-card p {
-  margin: 0;
-  color: var(--text-secondary);
-}
-
-.misconception-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-}
-
 .lesson-detail summary {
   cursor: pointer;
   list-style: none;
@@ -1610,7 +1573,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .poly-results-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .poly-card {
@@ -1882,17 +1845,11 @@ input[type="range"]::-moz-range-thumb {
 @media (max-width: 1270px) {
   .hero,
   .lesson-grid-three,
-  .poly-results-grid,
-  .butterfly-explain-grid {
+  .poly-results-grid {
     grid-template-columns: 1fr;
   }
 
   .metric-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .stage-roadmap,
-  .misconception-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1909,14 +1866,11 @@ input[type="range"]::-moz-range-thumb {
   .lesson-grid-two,
   .lesson-grid-three,
   .lesson-concepts-grid,
-  .butterfly-explain-grid,
   .lab-support-grid,
   .pipeline-overview,
   .poly-grid,
   .poly-input-grid,
-  .poly-expression-grid,
-  .stage-roadmap,
-  .misconception-grid {
+  .poly-expression-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1974,7 +1928,6 @@ input[type="range"]::-moz-range-thumb {
 
   .metric-grid,
   .lesson-concepts-grid,
-  .misconception-grid,
   .pipeline-overview {
     grid-template-columns: 1fr;
   }
