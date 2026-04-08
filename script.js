@@ -71,7 +71,79 @@ const POLYNOMIAL_PRESETS = {
 
 const POLYNOMIAL_DEFAULT_NOTE = "Choose a preset to fill both coefficient lists and compare naive vs FFT automatically.";
 
+const LAB_MODES = {
+  polynomial: {
+    title: "Polynomial Multiplication Workbench",
+    copy:
+      "Choose two polynomials, compare naive and FFT multiplication, and then inspect one pipeline phase at a time in the butterfly circuit.",
+    visualizerKicker: "Polynomial Workbench",
+    visualizerTitle: "Follow the polynomial multiplication pipeline in one shared FFT circuit",
+    transportHelp:
+      "Polynomial mode is selected. Build the active transform phase, then step through the butterfly circuit or switch phases to see padding, pointwise multiplication, and the final result."
+  },
+  frequency: {
+    title: "Frequency / Transform Workbench",
+    copy:
+      "Load one signal, build the trace, and watch the same butterfly circuit produce transform bins in the classic FFT interpretation.",
+    visualizerKicker: "Frequency Workbench",
+    visualizerTitle: "Inspect the FFT as a staged transform circuit for one signal at a time",
+    transportHelp:
+      "Frequency mode is selected. Build the trace first, then step or play through the butterfly circuit under the current stage highlight."
+  }
+};
+
+const POLYNOMIAL_PHASES = {
+  padding: {
+    label: "Zero Padding",
+    shortLabel: "Pad",
+    buildable: false,
+    help: "See how both coefficient arrays are padded to a shared power-of-two length before any FFT work begins."
+  },
+  "fft-a": {
+    label: "FFT of A",
+    shortLabel: "FFT(A)",
+    buildable: true,
+    help: "Animate the forward FFT that evaluates Polynomial A at the chosen roots of unity."
+  },
+  "fft-b": {
+    label: "FFT of B",
+    shortLabel: "FFT(B)",
+    buildable: true,
+    help: "Animate the forward FFT that evaluates Polynomial B at the same roots of unity."
+  },
+  pointwise: {
+    label: "Pointwise Multiplication",
+    shortLabel: "Pointwise",
+    buildable: false,
+    help: "This is the payoff moment: once both polynomials are in value form, matching entries multiply directly."
+  },
+  inverse: {
+    label: "Inverse FFT",
+    shortLabel: "Inverse",
+    buildable: true,
+    help: "Animate the inverse FFT that interpolates the pointwise product back into coefficient form."
+  },
+  result: {
+    label: "Final Coefficients",
+    shortLabel: "Result",
+    buildable: false,
+    help: "The final product comes from trimming extra zeros and rounding tiny floating-point noise."
+  }
+};
+
 const PSEUDOCODE_BLOCKS = [
+  {
+    key: "poly-pipeline",
+    title: "Polynomial Multiplication Pipeline",
+    lines: [
+      "pad A and B to a shared power-of-two length",
+      "FA <- FFT(A)",
+      "FB <- FFT(B)",
+      "for k from 0 to n - 1: FC[k] <- FA[k] * FB[k]",
+      "c <- inverse_FFT(FC)",
+      "trim extra zeros and round tiny noise"
+    ]
+  },
   {
     key: "bit-reversal",
     title: "Bit-Reversal Permutation",
@@ -106,6 +178,7 @@ const PSEUDOCODE_BLOCKS = [
 ];
 
 const appState = {
+  mode: "polynomial",
   rawInput: "",
   selectedSize: 8,
   selectedPreset: null,
@@ -121,10 +194,16 @@ const appState = {
   comparison: null,
   statusText: "Idle",
   statusTone: "idle",
+  frequencyState: {
+    rawInput: "",
+    selectedSize: 8,
+    selectedPreset: null
+  },
   polynomial: {
     rawA: "",
     rawB: "",
     selectedPreset: "intro-example",
+    selectedPhase: "fft-a",
     result: null,
     statusText: "Waiting",
     statusTone: "idle",
@@ -175,8 +254,8 @@ function magnitudeComplex(value) {
   return Math.hypot(value.re, value.im);
 }
 
-function twiddleFactor(power, span) {
-  const angle = (-2 * Math.PI * power) / span;
+function twiddleFactor(power, span, direction = "forward") {
+  const angle = ((direction === "inverse" ? 2 : -2) * Math.PI * power) / span;
   return complex(Math.cos(angle), Math.sin(angle));
 }
 
@@ -730,12 +809,13 @@ function createStep(base) {
       bitReversedValues: cloneComplexArray(base.renderData.bitReversedValues),
       bitReversalProgress: cloneComplexArray(base.renderData.bitReversalProgress),
       sourceOrderByPosition: base.renderData.sourceOrderByPosition.slice(),
-      stageColumns: cloneStageColumns(base.renderData.stageColumns)
+      stageColumns: cloneStageColumns(base.renderData.stageColumns),
+      labels: base.renderData.labels || null
     }
   };
 }
 
-function buildPreviewData(values) {
+function buildPreviewData(values, labels = null) {
   const size = values.length;
   const bitInfo = buildBitReversedCopy(values);
   return {
@@ -745,13 +825,18 @@ function buildPreviewData(values) {
     bitReversedValues: cloneComplexArray(bitInfo.values),
     bitReversalProgress: cloneComplexArray(bitInfo.values),
     sourceOrderByPosition: bitInfo.sourceOrderByPosition.slice(),
-    stageColumns: new Array(Math.log2(size)).fill(null)
+    stageColumns: new Array(Math.log2(size)).fill(null),
+    labels
   };
 }
 
-function buildFftSteps(values) {
+function buildFftSteps(values, options = {}) {
   const size = values.length;
   const depth = Math.log2(size);
+  const direction = options.direction || "forward";
+  const labels = options.labels || buildVisualizationLabels("Input", "x[i]", "Output", direction === "inverse" ? "coefficients" : "X[k]");
+  const introNoun = options.introNoun || (direction === "inverse" ? "values" : "samples");
+  const finalNoun = options.finalNoun || (direction === "inverse" ? "recovered coefficients" : "FFT output values");
   const originalValues = cloneComplexArray(values);
   const bitInfo = buildBitReversedCopy(values);
   const bitReversedValues = cloneComplexArray(bitInfo.values);
@@ -775,7 +860,7 @@ function buildFftSteps(values) {
       currentValues: originalValues,
       workingValues: originalValues,
       explanationText:
-        `Loaded ${size} samples. The iterative FFT will first place them into bit-reversed order so the later butterfly stages can update values in place.`,
+        `Loaded ${size} ${introNoun}. The iterative ${direction === "inverse" ? "inverse FFT" : "FFT"} will first place them into bit-reversed order so the later butterfly stages can update values in place.`,
       actionText: "Input accepted and ready for bit-reversal.",
       formulaText: "A <- bit_reverse_copy(x)",
       pseudocodeBlock: "iterative",
@@ -788,7 +873,8 @@ function buildFftSteps(values) {
         bitReversedValues,
         bitReversalProgress: bitProgress,
         sourceOrderByPosition: bitInfo.sourceOrderByPosition,
-        stageColumns
+        stageColumns,
+        labels
       }
     })
   );
@@ -809,9 +895,9 @@ function buildFftSteps(values) {
         currentValues: [originalValues[mapping.sourceIndex]],
         workingValues: bitProgress.filter(Boolean),
         explanationText:
-          `Bit-reversing index ${mapping.sourceIndex} (${mapping.sourceBinary}) to ${mapping.targetIndex} (${mapping.targetBinary}), so x[${mapping.sourceIndex}] moves to circuit position ${mapping.targetIndex} before the butterfly layers begin.`,
-        actionText: `Place x[${mapping.sourceIndex}] into bit-reversed position ${mapping.targetIndex}.`,
-        formulaText: `A[${mapping.targetIndex}] <- x[${mapping.sourceIndex}]`,
+          `Bit-reversing index ${mapping.sourceIndex} (${mapping.sourceBinary}) to ${mapping.targetIndex} (${mapping.targetBinary}), so entry ${mapping.sourceIndex} moves to circuit position ${mapping.targetIndex} before the butterfly layers begin.`,
+        actionText: `Place entry ${mapping.sourceIndex} into bit-reversed position ${mapping.targetIndex}.`,
+        formulaText: `A[${mapping.targetIndex}] <- input[${mapping.sourceIndex}]`,
         pseudocodeBlock: "bit-reversal",
         pseudocodeLine: 3,
         counters: buildCounters(size, -1, butterfliesProcessed, twiddleMultiplications, addSubOperations),
@@ -822,7 +908,8 @@ function buildFftSteps(values) {
           bitReversedValues,
           bitReversalProgress: bitProgress,
           sourceOrderByPosition: bitInfo.sourceOrderByPosition,
-          stageColumns
+          stageColumns,
+          labels
         }
       })
     );
@@ -844,7 +931,7 @@ function buildFftSteps(values) {
         currentValues: working,
         workingValues: working,
         explanationText:
-          `${stage.label} begins with block size ${stage.span}. Every butterfly in this layer combines values ${stage.half} positions apart, and all butterflies in the stage can run in parallel.`,
+          `${stage.label} begins with block size ${stage.span}. Every butterfly in this layer combines values ${stage.half} positions apart, and all butterflies in the stage can run in parallel${direction === "inverse" ? " while reconstructing coefficient form" : ""}.`,
         actionText: `${stage.label} is now highlighted.`,
         formulaText: `m <- ${stage.span}`,
         pseudocodeBlock: "iterative",
@@ -857,7 +944,8 @@ function buildFftSteps(values) {
           bitReversedValues,
           bitReversalProgress: bitReversedValues,
           sourceOrderByPosition: bitInfo.sourceOrderByPosition,
-          stageColumns
+          stageColumns,
+          labels
         }
       })
     );
@@ -866,7 +954,7 @@ function buildFftSteps(values) {
     stage.butterflies.forEach((butterfly) => {
       const upperIndex = butterfly.upper;
       const lowerIndex = butterfly.lower;
-      const w = twiddleFactor(butterfly.twiddlePower, butterfly.span);
+      const w = twiddleFactor(butterfly.twiddlePower, butterfly.span, direction);
       const u = cloneComplex(working[upperIndex]);
       const lowerValue = cloneComplex(working[lowerIndex]);
       const t = multiplyComplex(w, lowerValue);
@@ -911,7 +999,8 @@ function buildFftSteps(values) {
             bitReversedValues,
             bitReversalProgress: bitReversedValues,
             sourceOrderByPosition: bitInfo.sourceOrderByPosition,
-            stageColumns: previewColumns
+            stageColumns: previewColumns,
+            labels
           }
         })
       );
@@ -956,7 +1045,8 @@ function buildFftSteps(values) {
             bitReversedValues,
             bitReversalProgress: bitReversedValues,
             sourceOrderByPosition: bitInfo.sourceOrderByPosition,
-            stageColumns
+            stageColumns,
+            labels
           }
         })
       );
@@ -973,7 +1063,7 @@ function buildFftSteps(values) {
         currentValues: working,
         workingValues: working,
         explanationText:
-          `${stage.label} is complete. Every butterfly in this layer has finished, so the circuit can move one level deeper toward the final frequency outputs.`,
+          `${stage.label} is complete. Every butterfly in this layer has finished, so the circuit can move one level deeper toward the final ${finalNoun}.`,
         actionText: `${stage.label} finished.`,
         formulaText: `${stage.label} complete`,
         pseudocodeBlock: "iterative",
@@ -986,12 +1076,21 @@ function buildFftSteps(values) {
           bitReversedValues,
           bitReversalProgress: bitReversedValues,
           sourceOrderByPosition: bitInfo.sourceOrderByPosition,
-          stageColumns
+          stageColumns,
+          labels
         }
       })
     );
     stepIndex += 1;
   });
+
+  const finalWorking = direction === "inverse"
+    ? working.map((value) => scaleComplex(value, 1 / size))
+    : cloneComplexArray(working);
+
+  if (direction === "inverse") {
+    stageColumns[depth - 1] = cloneComplexArray(finalWorking);
+  }
 
   steps.push(
     createStep({
@@ -1000,12 +1099,14 @@ function buildFftSteps(values) {
       kind: "final-output",
       stageIndex: depth - 1,
       stageLabel: "Output",
-      currentValues: working,
-      workingValues: working,
+      currentValues: finalWorking,
+      workingValues: finalWorking,
       explanationText:
-        `All ${depth} stages are done. The output bins now hold the FFT of the original signal, and the iterative circuit agrees with the recursive FFT computation.`,
-      actionText: "Final FFT output is ready.",
-      formulaText: "X[k] is now available for every output bin k",
+        direction === "inverse"
+          ? `All ${depth} inverse stages are done. After dividing every entry by n = ${size}, the circuit has reconstructed the final coefficient list.`
+          : `All ${depth} stages are done. The output bins now hold the FFT of the original input in value form.`,
+      actionText: direction === "inverse" ? "Final coefficient output is ready." : "Final FFT output is ready.",
+      formulaText: direction === "inverse" ? `a[k] <- output[k] / ${size}` : "X[k] is now available for every output bin k",
       pseudocodeBlock: "iterative",
       pseudocodeLine: 6,
       counters: buildCounters(size, depth - 1, butterfliesProcessed, twiddleMultiplications, addSubOperations),
@@ -1016,7 +1117,8 @@ function buildFftSteps(values) {
         bitReversedValues,
         bitReversalProgress: bitReversedValues,
         sourceOrderByPosition: bitInfo.sourceOrderByPosition,
-        stageColumns
+        stageColumns,
+        labels
       }
     })
   );
@@ -1046,6 +1148,14 @@ function cacheDom() {
   dom.actionStage = document.getElementById("action-stage");
   dom.actionIndices = document.getElementById("action-indices");
   dom.actionTwiddle = document.getElementById("action-twiddle");
+  dom.modePanelTitle = document.getElementById("mode-panel-title");
+  dom.modePanelCopy = document.getElementById("mode-panel-copy");
+  dom.visualizerKicker = document.getElementById("visualizer-kicker");
+  dom.visualizerTitle = document.getElementById("visualizer-title");
+  dom.transportHelper = document.getElementById("transport-helper");
+  dom.frequencyModeBanner = document.getElementById("frequency-mode-banner");
+  dom.pipelineOverview = document.getElementById("poly-pipeline-overview");
+  dom.polyPhaseHelp = document.getElementById("poly-phase-help");
   dom.bitOriginalRow = document.getElementById("bit-original-row");
   dom.bitReversedRow = document.getElementById("bit-reversed-row");
   dom.bitReversalNote = document.getElementById("bit-reversal-note");
@@ -1057,9 +1167,13 @@ function cacheDom() {
   dom.comparisonStatus = document.getElementById("comparison-status");
   dom.comparisonSummary = document.getElementById("comparison-summary");
   dom.comparisonBody = document.getElementById("comparison-body");
+  dom.modeButtons = Array.from(document.querySelectorAll("[data-lab-mode]"));
+  dom.modePanels = Array.from(document.querySelectorAll("[data-mode-panel]"));
   dom.sizeButtons = Array.from(document.querySelectorAll("[data-size]"));
   dom.presetButtons = Array.from(document.querySelectorAll(".preset-button[data-preset]"));
   dom.polyPresetButtons = Array.from(document.querySelectorAll("[data-poly-preset]"));
+  dom.phaseButtons = Array.from(document.querySelectorAll(".phase-button[data-poly-phase]"));
+  dom.pipelineCards = Array.from(document.querySelectorAll(".pipeline-card[data-poly-phase]"));
   dom.counterTotalButterflies = document.getElementById("counter-total-butterflies");
   dom.counterProcessedButterflies = document.getElementById("counter-processed-butterflies");
   dom.counterTotalStages = document.getElementById("counter-total-stages");
@@ -1098,6 +1212,76 @@ function hasPolynomialUi() {
     dom.polyCompareButton &&
     dom.polyLoadButton
   );
+}
+
+// Return whether the active lab mode is the polynomial-first experience.
+function isPolynomialMode() {
+  return appState.mode === "polynomial";
+}
+
+// Return whether the selected polynomial phase can be animated in the butterfly circuit.
+function isAnimatablePolynomialPhase(phase = appState.polynomial.selectedPhase) {
+  return Boolean(POLYNOMIAL_PHASES[phase] && POLYNOMIAL_PHASES[phase].buildable);
+}
+
+// Build visualization labels for the currently selected transform view.
+function buildVisualizationLabels(inputLabel, inputMeta, outputLabel, outputMeta) {
+  return {
+    inputLabel,
+    inputMeta,
+    bitLabel: "Bit-Reversed",
+    bitMeta: "in-place load",
+    outputLabel,
+    outputMeta
+  };
+}
+
+// Describe the currently selected polynomial phase for UI copy and button states.
+function getSelectedPolynomialPhase() {
+  return POLYNOMIAL_PHASES[appState.polynomial.selectedPhase] || POLYNOMIAL_PHASES.padding;
+}
+
+// Return the current polynomial phase source when the shared circuit should animate a transform.
+function getActivePolynomialTraceSource() {
+  const result = appState.polynomial.result;
+  if (!result || !result.visualizerCompatible) {
+    return null;
+  }
+
+  switch (appState.polynomial.selectedPhase) {
+    case "fft-a":
+      return {
+        direction: "forward",
+        values: realCoefficientsToComplex(result.paddedA),
+        labels: buildVisualizationLabels("A Coeffs", "a[i]", "A(omega^k)", "value form"),
+        previewTitle: "Forward FFT of Polynomial A is ready.",
+        previewCopy:
+          `Preview the ${result.paddedSize}-point circuit that evaluates Polynomial A at the chosen roots of unity.`,
+        statusText: "FFT(A) Ready"
+      };
+    case "fft-b":
+      return {
+        direction: "forward",
+        values: realCoefficientsToComplex(result.paddedB),
+        labels: buildVisualizationLabels("B Coeffs", "b[i]", "B(omega^k)", "value form"),
+        previewTitle: "Forward FFT of Polynomial B is ready.",
+        previewCopy:
+          `Preview the ${result.paddedSize}-point circuit that evaluates Polynomial B at the same special points.`,
+        statusText: "FFT(B) Ready"
+      };
+    case "inverse":
+      return {
+        direction: "inverse",
+        values: result.pointwiseProduct,
+        labels: buildVisualizationLabels("Value Product", "C(omega^k)", "Coefficients", "product output"),
+        previewTitle: "Inverse FFT interpolation is ready.",
+        previewCopy:
+          `Preview the inverse ${result.paddedSize}-point circuit that turns the pointwise product back into coefficient form.`,
+        statusText: "Inverse Ready"
+      };
+    default:
+      return null;
+  }
 }
 
 function setStatus(text, tone) {
@@ -1140,6 +1324,9 @@ function getCurrentCounters() {
   if (currentStep) {
     return currentStep.counters;
   }
+  if (isPolynomialMode() && appState.polynomial.result) {
+    return buildCounters(appState.polynomial.result.paddedSize, -1, 0, 0, 0);
+  }
   if (appState.inputValid) {
     return buildCounters(appState.selectedSize, -1, 0, 0, 0);
   }
@@ -1149,20 +1336,34 @@ function getCurrentCounters() {
 function getCurrentPhaseLabel() {
   const currentStep = getCurrentStep();
   if (currentStep) {
+    let stepPhaseLabel = "Trace";
     switch (currentStep.phase) {
       case "input":
-        return "Input";
+        stepPhaseLabel = "Input";
+        break;
       case "bit-reversal":
-        return "Bit-Reversal";
+        stepPhaseLabel = "Bit-Reversal";
+        break;
       case "stage":
-        return "Stage Setup";
+        stepPhaseLabel = "Stage Setup";
+        break;
       case "butterfly":
-        return "Butterfly";
+        stepPhaseLabel = "Butterfly";
+        break;
       case "output":
-        return "Output";
+        stepPhaseLabel = "Output";
+        break;
       default:
-        return "Trace";
+        stepPhaseLabel = "Trace";
     }
+
+    if (isPolynomialMode()) {
+      return `${getSelectedPolynomialPhase().shortLabel} / ${stepPhaseLabel}`;
+    }
+    return stepPhaseLabel;
+  }
+  if (isPolynomialMode()) {
+    return getSelectedPolynomialPhase().label;
   }
   if (appState.inputValid) {
     return "Preview";
@@ -1187,8 +1388,173 @@ function updateSizeSelection() {
   });
 }
 
+// Refresh the lab tabs, mode panels, and pipeline selectors.
+function renderLabMode() {
+  const modeConfig = LAB_MODES[appState.mode];
+  dom.modeButtons.forEach((button) => {
+    const isSelected = button.dataset.labMode === appState.mode;
+    button.classList.toggle("is-selected", isSelected);
+    button.setAttribute("aria-selected", isSelected ? "true" : "false");
+  });
+
+  dom.modePanels.forEach((panel) => {
+    panel.hidden = panel.dataset.modePanel !== appState.mode;
+  });
+
+  if (dom.modePanelTitle) {
+    dom.modePanelTitle.textContent = modeConfig.title;
+  }
+  if (dom.modePanelCopy) {
+    dom.modePanelCopy.textContent = modeConfig.copy;
+  }
+  if (dom.visualizerKicker) {
+    dom.visualizerKicker.textContent = modeConfig.visualizerKicker;
+  }
+  if (dom.visualizerTitle) {
+    dom.visualizerTitle.textContent = modeConfig.visualizerTitle;
+  }
+  if (dom.transportHelper) {
+    dom.transportHelper.textContent = modeConfig.transportHelp;
+  }
+  if (dom.frequencyModeBanner) {
+    dom.frequencyModeBanner.hidden = appState.mode !== "frequency";
+  }
+  if (dom.pipelineOverview) {
+    dom.pipelineOverview.hidden = appState.mode !== "polynomial";
+  }
+}
+
+// Keep the polynomial phase buttons and pipeline cards visually synchronized.
+function renderPolynomialPhaseSelection() {
+  const selectedPhase = appState.polynomial.selectedPhase;
+  dom.phaseButtons.forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.polyPhase === selectedPhase);
+  });
+  dom.pipelineCards.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.polyPhase === selectedPhase);
+  });
+  if (dom.polyPhaseHelp) {
+    dom.polyPhaseHelp.textContent = getSelectedPolynomialPhase().help;
+  }
+}
+
+// Update the polynomial pipeline cards with the latest computed values.
+function renderPolynomialPipelineOverview() {
+  if (!dom.pipelineCards.length) {
+    return;
+  }
+
+  const result = appState.polynomial.result;
+  const contentByPhase = {
+    padding: result
+      ? `Pad both arrays to n = ${result.paddedSize} before any butterflies begin.`
+      : "Choose two polynomials and zero-pad them to a shared FFT size.",
+    "fft-a": result
+      ? `Evaluate A = ${formatRealList(result.paddedA)} at the roots of unity.`
+      : "Evaluate Polynomial A at the chosen roots of unity.",
+    "fft-b": result
+      ? `Evaluate B = ${formatRealList(result.paddedB)} at the same special points.`
+      : "Evaluate Polynomial B at the same special points.",
+    pointwise: result
+      ? `Multiply ${result.paddedSize} matching value pairs one by one.`
+      : "Multiply matching values directly after both forward transforms.",
+    inverse: result
+      ? `Interpolate the product values back into ${result.fftResult.length} coefficients.`
+      : "Interpolate back from value form to coefficient form.",
+    result: result
+      ? `Final coefficients: ${formatRealList(result.fftResult)}`
+      : "Trim and round to reveal the final product coefficients."
+  };
+
+  dom.pipelineCards.forEach((card) => {
+    const copy = card.querySelector(".pipeline-card-copy");
+    if (copy) {
+      copy.textContent = contentByPhase[card.dataset.polyPhase] || "";
+    }
+  });
+}
+
+// Sync the shared trace state so it follows the currently selected polynomial phase.
+function refreshPolynomialModeState() {
+  invalidateTrace();
+
+  const result = appState.polynomial.result;
+  const source = getActivePolynomialTraceSource();
+
+  if (!result) {
+    appState.parsedValues = [];
+    appState.inputValid = false;
+    appState.previewData = null;
+    appState.comparison = null;
+    setStatus("Compare Polynomials", "idle");
+    renderAll();
+    return;
+  }
+
+  if (!source) {
+    appState.parsedValues = [];
+    appState.inputValid = false;
+    appState.previewData = null;
+    appState.comparison = null;
+    setStatus(getSelectedPolynomialPhase().shortLabel, "ready");
+    renderAll();
+    return;
+  }
+
+  appState.selectedSize = source.values.length;
+  appState.parsedValues = cloneComplexArray(source.values);
+  appState.inputValid = true;
+  appState.previewData = buildPreviewData(source.values, source.labels);
+  appState.comparison = null;
+  setStatus(source.statusText, "ready");
+  renderAll();
+}
+
+// Restore the classic FFT input state when the frequency tab is active.
+function restoreFrequencyModeState() {
+  appState.rawInput = appState.frequencyState.rawInput;
+  appState.selectedSize = appState.frequencyState.selectedSize;
+  appState.selectedPreset = appState.frequencyState.selectedPreset;
+  if (dom.customInput) {
+    dom.customInput.value = appState.rawInput;
+  }
+  refreshInputState();
+}
+
+// Switch between the polynomial-first lab and the classic frequency view.
+function setLabMode(mode) {
+  if (!LAB_MODES[mode] || appState.mode === mode) {
+    return;
+  }
+
+  appState.mode = mode;
+
+  if (mode === "polynomial") {
+    refreshPolynomialModeState();
+    return;
+  }
+
+  restoreFrequencyModeState();
+}
+
+// Change which polynomial phase is shown in the shared workbench.
+function setPolynomialPhase(phase) {
+  if (!POLYNOMIAL_PHASES[phase] || appState.polynomial.selectedPhase === phase) {
+    return;
+  }
+
+  appState.polynomial.selectedPhase = phase;
+  if (isPolynomialMode()) {
+    refreshPolynomialModeState();
+    return;
+  }
+  renderAll();
+}
+
 function updateButtons() {
-  const hasValidInput = appState.inputValid;
+  const hasValidInput = isPolynomialMode()
+    ? Boolean(getActivePolynomialTraceSource())
+    : appState.inputValid;
   const hasTrace = appState.isBuilt && appState.steps.length > 0;
   const atEnd = hasTrace && appState.currentStepIndex >= appState.steps.length - 1;
 
@@ -1200,6 +1566,10 @@ function updateButtons() {
 }
 
 function renderValidationMessage() {
+  if (isPolynomialMode()) {
+    return;
+  }
+
   dom.inputHelp.textContent = appState.inputValid ? READY_INPUT_HELP : DEFAULT_INPUT_HELP;
   dom.inputHelp.dataset.tone = appState.inputValid ? "success" : "";
 
@@ -1215,17 +1585,77 @@ function renderStatus() {
   dom.statusValue.dataset.state = appState.statusTone;
   dom.sessionStepCounter.textContent = getStepCountText();
   dom.diagramStepCounter.textContent = `${getStepCountText()} steps`;
-  dom.inputSizeValue.textContent = String(appState.selectedSize);
+  dom.inputSizeValue.textContent = isPolynomialMode() && appState.polynomial.result
+    ? String(appState.polynomial.result.paddedSize)
+    : String(appState.selectedSize);
   dom.phaseValue.textContent = getCurrentPhaseLabel();
 }
 
 function renderActionStrip() {
   const currentStep = getCurrentStep();
 
+  if (isPolynomialMode() && !currentStep) {
+    const result = appState.polynomial.result;
+    const phase = appState.polynomial.selectedPhase;
+
+    if (!result) {
+      dom.actionTitle.textContent = "Polynomial inputs are waiting.";
+      dom.actionCopy.textContent = "Enter two coefficient lists or load a preset, then compare naive vs FFT to build the multiplication pipeline.";
+      dom.actionPhase.textContent = "Phase: Polynomial Setup";
+      dom.actionStage.textContent = "Stage: --";
+      dom.actionIndices.textContent = "Indices: --";
+      dom.actionTwiddle.textContent = "Twiddle: --";
+      return;
+    }
+
+    if (phase === "padding") {
+      dom.actionTitle.textContent = "Zero padding prepares both polynomials for one shared FFT size.";
+      dom.actionCopy.textContent = `A is padded to ${formatRealList(result.paddedA)} and B is padded to ${formatRealList(result.paddedB)} so the product fits inside n = ${result.paddedSize}.`;
+      dom.actionPhase.textContent = "Phase: Zero Padding";
+      dom.actionStage.textContent = `Stage: n = ${result.paddedSize}`;
+      dom.actionIndices.textContent = "Indices: full arrays";
+      dom.actionTwiddle.textContent = "Twiddle: not used yet";
+      return;
+    }
+
+    if (phase === "pointwise") {
+      dom.actionTitle.textContent = "Pointwise multiplication is the payoff of changing representation.";
+      dom.actionCopy.textContent = "Once both polynomials are in value form, matching entries multiply directly. This is why FFT helps polynomial multiplication.";
+      dom.actionPhase.textContent = "Phase: Pointwise Multiply";
+      dom.actionStage.textContent = `Stage: ${result.paddedSize} value pairs`;
+      dom.actionIndices.textContent = "Indices: matching k values";
+      dom.actionTwiddle.textContent = "Twiddle: already applied in the forward FFTs";
+      return;
+    }
+
+    if (phase === "result") {
+      dom.actionTitle.textContent = "The final product coefficients are ready.";
+      dom.actionCopy.textContent = `After inverse FFT, the product coefficients are ${formatRealList(result.fftResult)}. This matches the naive convolution result.`;
+      dom.actionPhase.textContent = "Phase: Final Coefficients";
+      dom.actionStage.textContent = "Stage: output ready";
+      dom.actionIndices.textContent = "Indices: coefficient positions";
+      dom.actionTwiddle.textContent = "Twiddle: complete";
+      return;
+    }
+
+    const source = getActivePolynomialTraceSource();
+    if (source) {
+      dom.actionTitle.textContent = source.previewTitle;
+      dom.actionCopy.textContent = source.previewCopy;
+      dom.actionPhase.textContent = `Phase: ${getSelectedPolynomialPhase().label}`;
+      dom.actionStage.textContent = `Stage: ${Math.log2(result.paddedSize)} layers`;
+      dom.actionIndices.textContent = "Indices: --";
+      dom.actionTwiddle.textContent = phase === "inverse" ? "Twiddle: inverse roots" : "Twiddle: roots of unity";
+      return;
+    }
+  }
+
   if (currentStep) {
     dom.actionTitle.textContent = currentStep.actionText;
     dom.actionCopy.textContent = currentStep.explanationText;
-    dom.actionPhase.textContent = `Phase: ${getCurrentPhaseLabel()}`;
+    dom.actionPhase.textContent = isPolynomialMode()
+      ? `Phase: ${getSelectedPolynomialPhase().label}`
+      : `Phase: ${getCurrentPhaseLabel()}`;
     dom.actionStage.textContent = `Stage: ${currentStep.stageLabel || "--"}`;
 
     if (currentStep.phase === "bit-reversal") {
@@ -1282,6 +1712,22 @@ function renderCounters() {
 function renderPseudocode() {
   const currentStep = getCurrentStep();
   dom.pseudocodeBody.innerHTML = "";
+  let manualHighlight = null;
+
+  if (!currentStep && isPolynomialMode() && appState.polynomial.result) {
+    const lineByPhase = {
+      padding: 1,
+      "fft-a": 2,
+      "fft-b": 3,
+      pointwise: 4,
+      inverse: 5,
+      result: 6
+    };
+    manualHighlight = {
+      block: "poly-pipeline",
+      line: lineByPhase[appState.polynomial.selectedPhase] || 1
+    };
+  }
 
   PSEUDOCODE_BLOCKS.forEach((block) => {
     const section = document.createElement("section");
@@ -1296,7 +1742,10 @@ function renderPseudocode() {
       const row = document.createElement("div");
       row.className = "code-line";
 
-      if (currentStep && currentStep.pseudocodeBlock === block.key && currentStep.pseudocodeLine === index + 1) {
+      if (
+        (currentStep && currentStep.pseudocodeBlock === block.key && currentStep.pseudocodeLine === index + 1) ||
+        (!currentStep && manualHighlight && manualHighlight.block === block.key && manualHighlight.line === index + 1)
+      ) {
         row.classList.add("is-active");
       }
 
@@ -1323,6 +1772,49 @@ function renderExplanation() {
     dom.stepExplanation.textContent = currentStep.explanationText;
     dom.stepFormula.textContent = currentStep.formulaText;
     return;
+  }
+
+  if (isPolynomialMode()) {
+    const result = appState.polynomial.result;
+    const phase = appState.polynomial.selectedPhase;
+
+    if (!result) {
+      dom.stepExplanation.textContent =
+        "Polynomial mode starts by comparing naive multiplication with FFT-based multiplication. Once both coefficient lists are valid, the app pads them, evaluates them, multiplies values pointwise, and interpolates the result.";
+      dom.stepFormula.textContent = "Enter A(x) and B(x), then click Compare Naive vs FFT.";
+      return;
+    }
+
+    if (phase === "padding") {
+      dom.stepExplanation.textContent =
+        `Padding makes both arrays long enough for the full product and rounds the size up to the nearest supported power of two. Here the shared FFT size is ${result.paddedSize}.`;
+      dom.stepFormula.textContent = `Pad A -> ${formatRealList(result.paddedA)}, Pad B -> ${formatRealList(result.paddedB)}`;
+      return;
+    }
+
+    if (phase === "pointwise") {
+      dom.stepExplanation.textContent =
+        "Pointwise multiplication is the key simplification. After evaluation, coefficient convolution becomes simple entry-by-entry multiplication in value form.";
+      dom.stepFormula.textContent = "C(omega^k) = A(omega^k) * B(omega^k)";
+      return;
+    }
+
+    if (phase === "result") {
+      dom.stepExplanation.textContent =
+        "The inverse FFT returns to coefficient form. The last clean-up step trims extra zeros and rounds away tiny floating-point noise so the final polynomial is easy to read.";
+      dom.stepFormula.textContent = formatPolynomialExpression(result.fftResult);
+      return;
+    }
+
+    const source = getActivePolynomialTraceSource();
+    if (source) {
+      dom.stepExplanation.textContent =
+        `${source.previewCopy} Build steps to watch the bit-reversal load, stage setup, butterflies, and final outputs for this phase.`;
+      dom.stepFormula.textContent = appState.polynomial.selectedPhase === "inverse"
+        ? "coefficients <- inverse_FFT(pointwise product)"
+        : `${getSelectedPolynomialPhase().shortLabel} <- FFT(padded coefficients)`;
+      return;
+    }
   }
 
   if (appState.inputValid) {
@@ -1399,6 +1891,12 @@ function createBitChip(index, meta, stateClass) {
 function renderBitReversalPanel() {
   dom.bitOriginalRow.innerHTML = "";
   dom.bitReversedRow.innerHTML = "";
+
+  if (isPolynomialMode() && !appState.inputValid && appState.polynomial.result) {
+    dom.bitReversalNote.textContent =
+      "Bit reversal is part of the FFT(A), FFT(B), and inverse FFT phases. Choose one of those phases to inspect how the in-place ordering works.";
+    return;
+  }
 
   if (!appState.inputValid) {
     dom.bitReversalNote.textContent = "Build the trace to step through each reversed-binary mapping.";
@@ -1481,6 +1979,89 @@ function renderSvgPlaceholder(message) {
 
   dom.fftSvg.appendChild(background);
   dom.fftSvg.appendChild(text);
+}
+
+// Draw a simple row-based SVG summary for non-butterfly polynomial phases.
+function renderPolynomialRowsView(title, subtitle, rows) {
+  const cellWidth = 94;
+  const labelWidth = 172;
+  const rowHeight = 92;
+  const left = 60;
+  const top = 112;
+  const maxRowLength = Math.max(...rows.map((row) => row.values.length), 1);
+  const width = left + labelWidth + maxRowLength * cellWidth + 80;
+  const height = top + rows.length * rowHeight + 70;
+
+  dom.fftSvg.innerHTML = "";
+  dom.fftSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+  dom.fftSvg.appendChild(
+    createSvgNode("rect", {
+      x: 18,
+      y: 18,
+      width: width - 36,
+      height: height - 36,
+      rx: 24,
+      ry: 24,
+      fill: "rgba(255,255,255,0.02)",
+      stroke: "rgba(255,255,255,0.07)"
+    })
+  );
+
+  dom.fftSvg.appendChild(
+    createSvgNode("text", {
+      x: left,
+      y: 56,
+      class: "fft-inline-title",
+      textContent: title
+    })
+  );
+
+  dom.fftSvg.appendChild(
+    createSvgNode("text", {
+      x: left,
+      y: 80,
+      class: "fft-inline-meta",
+      textContent: subtitle
+    })
+  );
+
+  rows.forEach((row, rowIndex) => {
+    const y = top + rowIndex * rowHeight;
+
+    dom.fftSvg.appendChild(
+      createSvgNode("text", {
+        x: left,
+        y: y + 5,
+        class: "fft-row-label",
+        textContent: row.label
+      })
+    );
+
+    row.values.forEach((value, valueIndex) => {
+      const x = left + labelWidth + valueIndex * cellWidth;
+      dom.fftSvg.appendChild(
+        createSvgNode("rect", {
+          class: "fft-value-pill-bg is-resolved",
+          x: x - 42,
+          y: y - 17,
+          width: 84,
+          height: 30,
+          rx: 15,
+          ry: 15
+        })
+      );
+
+      dom.fftSvg.appendChild(
+        createSvgNode("text", {
+          class: "fft-value-pill-text",
+          x,
+          y: y + 3,
+          textContent: typeof value === "number" ? formatNumber(value, 3) : formatComplexCompact(value)
+        })
+      );
+    });
+  });
 }
 
 function getBitLineState(step, sourceIndex, targetIndex, renderData) {
@@ -1578,6 +2159,58 @@ function getNodeState(step, columnType, columnStageIndex, rowIndex, renderData) 
 }
 
 function renderVisualization() {
+  if (isPolynomialMode()) {
+    const result = appState.polynomial.result;
+    if (!result) {
+      renderSvgPlaceholder("Compare two polynomials to populate the multiplication pipeline.");
+      return;
+    }
+
+    if (!result.visualizerCompatible && isAnimatablePolynomialPhase()) {
+      renderSvgPlaceholder("This example pads beyond the current 8-point and 16-point circuit views, so choose a smaller polynomial example to animate the butterflies.");
+      return;
+    }
+
+    if (appState.polynomial.selectedPhase === "padding") {
+      renderPolynomialRowsView(
+        "Zero padding before FFT",
+        `Both polynomials are padded to n = ${result.paddedSize} so the product fits in one shared transform size.`,
+        [
+          { label: "A original", values: result.coefficientsA },
+          { label: "A padded", values: result.paddedA },
+          { label: "B original", values: result.coefficientsB },
+          { label: "B padded", values: result.paddedB }
+        ]
+      );
+      return;
+    }
+
+    if (appState.polynomial.selectedPhase === "pointwise") {
+      renderPolynomialRowsView(
+        "Pointwise multiplication in value form",
+        "After both forward FFTs, matching entries multiply directly because both polynomials are now represented by their values.",
+        [
+          { label: "FFT(A)", values: result.fftA },
+          { label: "FFT(B)", values: result.fftB },
+          { label: "Product", values: result.pointwiseProduct }
+        ]
+      );
+      return;
+    }
+
+    if (appState.polynomial.selectedPhase === "result") {
+      renderPolynomialRowsView(
+        "Recovered coefficient output",
+        "After inverse FFT, trim the extra zeros and round tiny noise to reveal the final product coefficients.",
+        [
+          { label: "Coefficients", values: result.fftResult },
+          { label: "Naive check", values: result.naiveResult }
+        ]
+      );
+      return;
+    }
+  }
+
   const renderData = getRenderableData();
   const currentStep = getCurrentStep();
 
@@ -1600,19 +2233,20 @@ function renderVisualization() {
 
   dom.fftSvg.innerHTML = "";
   dom.fftSvg.setAttribute("viewBox", `0 0 ${totalWidth} ${totalHeight}`);
+  const labels = renderData.labels || {};
 
   const columns = [
     {
       key: "input",
-      label: "Input",
-      meta: "x[i]",
+      label: labels.inputLabel || "Input",
+      meta: labels.inputMeta || "x[i]",
       values: renderData.originalValues,
       x: leftMargin + 80
     },
     {
       key: "bit-reversal",
-      label: "Bit-Reversed",
-      meta: "A[r]",
+      label: labels.bitLabel || "Bit-Reversed",
+      meta: labels.bitMeta || "A[r]",
       values: renderData.bitReversalProgress,
       x: leftMargin + 80 + columnSpacing
     }
@@ -1622,8 +2256,8 @@ function renderVisualization() {
     columns.push({
       key: "stage",
       stageIndex: index,
-      label: index === depth - 1 ? `${stage.label} / Output` : stage.label,
-      meta: stage.metaLabel,
+      label: index === depth - 1 ? (labels.outputLabel || `${stage.label} / Output`) : stage.label,
+      meta: index === depth - 1 ? (labels.outputMeta || stage.metaLabel) : stage.metaLabel,
       values: renderData.stageColumns[index],
       x: leftMargin + 80 + columnSpacing * (index + 2)
     });
@@ -1895,7 +2529,11 @@ function renderHistory() {
 
   if (!appState.isBuilt || !appState.steps.length) {
     const row = document.createElement("tr");
-    row.innerHTML = '<td colspan="7" class="cell-muted">No trace yet. Build steps to populate the FFT history.</td>';
+    row.innerHTML = `<td colspan="7" class="cell-muted">${
+      isPolynomialMode() && !isAnimatablePolynomialPhase()
+        ? "Choose FFT(A), FFT(B), or inverse FFT to build a butterfly trace for polynomial multiplication."
+        : "No trace yet. Build steps to populate the FFT history."
+    }</td>`;
     dom.historyBody.appendChild(row);
     return;
   }
@@ -1970,7 +2608,7 @@ function renderPolynomialSection() {
     dom.polyFftCost.textContent = "--";
     dom.polyLoadButton.disabled = true;
     dom.polyLoadNote.textContent =
-      "The FFT visualizer displays one signal at a time, so this button loads the padded coefficients of Polynomial A into the main circuit workspace.";
+      "The frequency tab keeps the classic one-signal FFT interpretation, so this button sends the padded coefficients of Polynomial A there when you want to compare the two views.";
     return;
   }
 
@@ -1995,11 +2633,14 @@ function renderPolynomialSection() {
   dom.polyFftCost.textContent = `About ${Math.round(result.fftWorkEstimate)} structured operations using ${result.paddedSize}-point FFT passes`;
   dom.polyLoadButton.disabled = !result.visualizerCompatible;
   dom.polyLoadNote.textContent = result.visualizerCompatible
-    ? "Polynomial A can be loaded directly into the main FFT visualizer because the padded length matches a supported circuit size."
-    : "This product uses a padded size outside the current 8/16 teaching circuits, so the load-to-visualizer button is disabled.";
+    ? "Polynomial A can be sent directly to the frequency tab because the padded length matches a supported circuit size."
+    : "This product uses a padded size outside the current 8/16 teaching circuits, so the frequency-view handoff is disabled.";
 }
 
 function renderAll() {
+  renderLabMode();
+  renderPolynomialPhaseSelection();
+  renderPolynomialPipelineOverview();
   renderValidationMessage();
   updatePresetSelection();
   updateSizeSelection();
@@ -2019,6 +2660,9 @@ function renderAll() {
 
 function refreshInputState() {
   invalidateTrace();
+  appState.frequencyState.rawInput = appState.rawInput;
+  appState.frequencyState.selectedSize = appState.selectedSize;
+  appState.frequencyState.selectedPreset = appState.selectedPreset;
   const parsed = parseComplexList(appState.rawInput, appState.selectedSize);
 
   if (!parsed.valid) {
@@ -2042,6 +2686,7 @@ function refreshInputState() {
 function handleInputChange() {
   appState.rawInput = dom.customInput.value.trim();
   appState.selectedPreset = null;
+  appState.frequencyState.selectedPreset = null;
   dom.presetNote.textContent = "Presets regenerate for the selected size so the circuit always stays power-of-two.";
   refreshInputState();
 }
@@ -2066,6 +2711,7 @@ function handleSizeChange(size) {
   }
 
   appState.selectedSize = size;
+  appState.frequencyState.selectedSize = size;
   if (!appState.selectedPreset) {
     dom.presetNote.textContent = "Presets regenerate for the selected size so the circuit always stays power-of-two.";
   }
@@ -2092,6 +2738,10 @@ function handlePolynomialInputChange() {
   appState.polynomial.statusText = "Edited";
   appState.polynomial.statusTone = "paused";
   appState.polynomial.statusCopy = "Coefficient lists changed. Click Compare Naive vs FFT to recompute the product.";
+  if (isPolynomialMode()) {
+    refreshPolynomialModeState();
+    return;
+  }
   renderAll();
 }
 
@@ -2150,10 +2800,14 @@ function comparePolynomialInputs() {
   appState.polynomial.statusCopy = appState.polynomial.result.matches
     ? "Naive convolution and FFT-based multiplication produced the same coefficient result."
     : "The two methods disagreed, which means something needs debugging.";
+  if (isPolynomialMode()) {
+    refreshPolynomialModeState();
+    return;
+  }
   renderAll();
 }
 
-// Push the padded coefficients of Polynomial A into the main FFT visualizer input.
+// Push the padded coefficients of Polynomial A into the frequency tab for the classic FFT view.
 function loadPolynomialIntoVisualizer() {
   if (!hasPolynomialUi()) {
     return;
@@ -2164,22 +2818,41 @@ function loadPolynomialIntoVisualizer() {
     return;
   }
 
-  appState.selectedSize = result.paddedSize;
+  appState.frequencyState.selectedSize = result.paddedSize;
+  appState.frequencyState.selectedPreset = null;
+  appState.frequencyState.rawInput = serializeValues(realCoefficientsToComplex(result.paddedA));
+  appState.rawInput = appState.frequencyState.rawInput;
   appState.selectedPreset = null;
-  updateSizeSelection();
-  appState.rawInput = serializeValues(realCoefficientsToComplex(result.paddedA));
-  dom.customInput.value = appState.rawInput;
-  dom.presetNote.textContent = "Loaded padded Polynomial A into the FFT visualizer so the circuit view matches the polynomial multiplication lesson.";
-  refreshInputState();
+  appState.selectedSize = result.paddedSize;
+  if (dom.customInput) {
+    dom.customInput.value = appState.rawInput;
+  }
+  if (dom.presetNote) {
+    dom.presetNote.textContent = "Loaded padded Polynomial A into the frequency view so you can compare the same coefficients under the classic FFT interpretation.";
+  }
+  setLabMode("frequency");
 }
 
 function buildTrace() {
-  if (!appState.inputValid) {
+  let buildOptions = {};
+
+  if (isPolynomialMode()) {
+    const source = getActivePolynomialTraceSource();
+    if (!source) {
+      return;
+    }
+    buildOptions = {
+      direction: source.direction,
+      labels: source.labels,
+      introNoun: source.direction === "inverse" ? "value-form entries" : "coefficient entries",
+      finalNoun: source.direction === "inverse" ? "coefficient outputs" : "value-form outputs"
+    };
+  } else if (!appState.inputValid) {
     return;
   }
 
   clearPlaybackTimer();
-  appState.steps = buildFftSteps(appState.parsedValues);
+  appState.steps = buildFftSteps(appState.parsedValues, buildOptions);
   appState.currentStepIndex = 0;
   appState.isBuilt = true;
   setStatus("Built", "ready");
@@ -2263,6 +2936,15 @@ function resetTrace() {
 
 function bindEvents() {
   dom.customInput.addEventListener("input", handleInputChange);
+  dom.modeButtons.forEach((button) => {
+    button.addEventListener("click", () => setLabMode(button.dataset.labMode));
+  });
+  dom.phaseButtons.forEach((button) => {
+    button.addEventListener("click", () => setPolynomialPhase(button.dataset.polyPhase));
+  });
+  dom.pipelineCards.forEach((button) => {
+    button.addEventListener("click", () => setPolynomialPhase(button.dataset.polyPhase));
+  });
   if (dom.polyInputA) {
     dom.polyInputA.addEventListener("input", handlePolynomialInputChange);
   }

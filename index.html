@@ -16,18 +16,18 @@
             <span class="eyebrow-tag">Beginner-friendly Algorithms II teaching tool</span>
           </div>
 
-          <h1 class="page-title">Learn why FFT is fast, then watch every butterfly stage happen.</h1>
+          <h1 class="page-title">Use FFT to multiply polynomials fast, then watch every butterfly stage happen.</h1>
           <p class="page-subtitle">
-            This tool teaches the Fast Fourier Transform as a clear visual story for beginners.
-            Start with why polynomial multiplication becomes hard, learn how FFT changes the
-            representation, and then step through the butterfly circuit that cuts the work from
-            <strong>O(n^2)</strong> to <strong>O(n log n)</strong>.
+            This tool now leads with the main Algorithms II payoff: fast polynomial multiplication.
+            Start with why direct coefficient multiplication becomes expensive, learn how FFT changes
+            polynomials into value form, and then inspect the butterfly circuit that cuts the work from
+            <strong>O(n^2)</strong> to <strong>O(n log n)</strong>. A secondary frequency view is still here when you want it.
           </p>
 
           <div class="hero-chip-row" aria-label="Page navigation">
             <a class="hero-chip hero-chip-link" href="#learn-fft">Learn FFT</a>
-            <a class="hero-chip hero-chip-link hero-chip-tool" href="#fft-lab">Butterfly Lab</a>
-            <a class="hero-chip hero-chip-link" href="#polynomial-multiplication">Polynomial Payoff</a>
+            <a class="hero-chip hero-chip-link hero-chip-tool" href="#fft-lab">Polynomial Lab</a>
+            <a class="hero-chip hero-chip-link" href="#worked-example">Worked Example</a>
           </div>
         </div>
 
@@ -212,35 +212,35 @@
 
       <section id="fft-lab" class="section-shell lab-section" aria-label="FFT visualizer lab">
         <div class="section-heading section-heading-spacious">
-          <span class="panel-kicker">8. Butterfly Computation</span>
-          <h2 class="section-title">This is the basic merge step that appears throughout FFT</h2>
+          <span class="panel-kicker">8. Polynomial-First FFT Lab</span>
+          <h2 class="section-title">Start with polynomial multiplication, then switch to the classic transform view when you want it</h2>
           <p class="section-copy">
-            After smaller FFT subproblems are solved, their results are merged with butterfly
-            operations. A butterfly combines two values using addition, subtraction, and a twiddle
-            factor. The interactive visualizer below lets you watch that pattern repeat across the
-            circuit.
+            The same butterfly circuit supports both interpretations. In the default lab, you use FFT
+            to evaluate two polynomials, multiply their values pointwise, and then recover the final
+            coefficients. The frequency tab is still available when you want a more traditional FFT view.
           </p>
         </div>
 
         <div class="butterfly-explain-grid">
           <article class="feature-card lesson-card">
             <span class="feature-kicker">Inputs</span>
-            <h3 class="panel-heading">Where the two values come from</h3>
+            <h3 class="panel-heading">Polynomial coefficients become the circuit inputs</h3>
             <div class="card-body">
               <p>
-                Each butterfly receives one value from the upper branch and one from the lower
-                branch. These values come from smaller FFT subproblems that have already been solved.
+                In polynomial mode, the circuit starts from padded coefficient arrays such as
+                <code>[1, 2, 3, 0, 0, 0, 0, 0]</code>. Those coefficients are what the butterflies
+                evaluate at roots of unity.
               </p>
             </div>
           </article>
 
           <article class="feature-card lesson-card">
             <span class="feature-kicker">Twiddle Factor</span>
-            <h3 class="panel-heading">Why one branch is multiplied</h3>
+            <h3 class="panel-heading">The same complex rotation still drives each butterfly</h3>
             <div class="card-body">
               <p>
-                One input is multiplied by a twiddle factor <code>W</code>. This rotation supplies
-                the phase information needed to combine the even and odd pieces correctly.
+                One branch is still multiplied by a twiddle factor <code>W</code>. In polynomial
+                language, that rotation helps combine smaller evaluation problems into the full value form.
               </p>
               <div class="formula-card">
                 <span class="formula-label">Butterfly formula</span>
@@ -251,14 +251,25 @@
 
           <article class="feature-card lesson-card">
             <span class="feature-kicker">Outputs</span>
-            <h3 class="panel-heading">How the pair moves into the next stage</h3>
+            <h3 class="panel-heading">Each phase feeds the next part of the multiplication pipeline</h3>
             <div class="card-body">
               <p>
-                The butterfly produces a top output and a bottom output. Those two updated values
-                feed the next stage of the FFT and help build the final transformed list.
+                Forward FFT produces values such as <code>A(&omega;^k)</code> and <code>B(&omega;^k)</code>,
+                pointwise multiplication combines them, and inverse FFT returns the final coefficients.
               </p>
             </div>
           </article>
+        </div>
+
+        <div class="lab-mode-bar" aria-label="Lab mode selection">
+          <div class="segmented-control mode-tab-control" role="tablist" aria-label="Choose the active FFT lab mode">
+            <button id="mode-polynomial-btn" type="button" class="segmented-button mode-tab is-selected" data-lab-mode="polynomial" role="tab" aria-selected="true">Polynomial Multiplication</button>
+            <button id="mode-frequency-btn" type="button" class="segmented-button mode-tab" data-lab-mode="frequency" role="tab" aria-selected="false">Frequency / Transform View</button>
+          </div>
+          <p class="lab-mode-copy">
+            Polynomial multiplication comes first. Use the second tab if you want to inspect impulse, single-tone,
+            and other signal-style FFT examples after the main lesson makes sense.
+          </p>
         </div>
 
         <div class="layout">
@@ -266,49 +277,123 @@
           <section class="panel control-panel">
             <div class="panel-section">
               <span class="panel-kicker">Workspace</span>
-              <h2 class="panel-title">Configure The FFT Input</h2>
+              <h2 id="mode-panel-title" class="panel-title">Polynomial Multiplication Workbench</h2>
+              <p id="mode-panel-copy" class="card-copy">
+                Choose two polynomials, compare naive and FFT multiplication, and then inspect one pipeline phase at a time in the butterfly circuit.
+              </p>
             </div>
 
             <div class="control-stack">
-              <section class="control-section">
-                <label class="control-label" for="custom-input">Custom Input</label>
-                <textarea
-                  id="custom-input"
-                  class="input-field input-area"
-                  rows="4"
-                  placeholder="e.g. 1, 0, 0, 0, 0, 0, 0, 0 or 1+0i, 0+1i, -1, -i"
-                  aria-describedby="input-help"
-                ></textarea>
-                <p id="input-help" class="help-text" aria-live="polite">
-                  Enter exactly 8 or 16 comma-separated samples. Real and complex forms are both supported.
-                </p>
-              </section>
+              <div class="mode-panel" data-mode-panel="polynomial">
+                <section class="control-section">
+                  <label class="control-label" for="poly-input-a">Polynomial A Coefficients</label>
+                  <textarea id="poly-input-a" class="input-field input-area" rows="3" placeholder="e.g. 1, 2, 3"></textarea>
+                </section>
 
-              <section class="control-section">
-                <div class="section-head section-head-stack">
-                  <span class="section-kicker">Sample Inputs</span>
+                <section class="control-section">
+                  <label class="control-label" for="poly-input-b">Polynomial B Coefficients</label>
+                  <textarea id="poly-input-b" class="input-field input-area" rows="3" placeholder="e.g. 2, 1"></textarea>
+                  <p class="help-text">Enter real coefficients from constant term upward, such as <code>1, 2, 3</code> for <code>1 + 2x + 3x^2</code>.</p>
+                </section>
+
+                <section class="control-section">
+                  <div class="section-head section-head-stack">
+                    <span class="section-kicker">Polynomial Presets</span>
+                  </div>
+                  <div class="button-row preset-grid" role="group" aria-label="Polynomial multiplication presets">
+                    <button type="button" class="preset-button" data-poly-preset="intro-example">Intro Example</button>
+                    <button type="button" class="preset-button" data-poly-preset="larger-example">Larger Example</button>
+                    <button type="button" class="preset-button" data-poly-preset="scaling-example">Scaling Example</button>
+                  </div>
+                  <p id="poly-preset-note" class="help-text">Choose a preset to fill both coefficient lists and compare naive vs FFT automatically.</p>
+                </section>
+
+                <section class="control-section">
+                  <div class="section-head section-head-stack">
+                    <span class="section-kicker">Pipeline Phase</span>
+                  </div>
+                  <div class="button-row phase-picker" role="group" aria-label="Polynomial multiplication pipeline phases">
+                    <button type="button" class="phase-button" data-poly-phase="padding">Pad</button>
+                    <button type="button" class="phase-button is-selected" data-poly-phase="fft-a">FFT(A)</button>
+                    <button type="button" class="phase-button" data-poly-phase="fft-b">FFT(B)</button>
+                    <button type="button" class="phase-button" data-poly-phase="pointwise">Pointwise</button>
+                    <button type="button" class="phase-button" data-poly-phase="inverse">Inverse FFT</button>
+                    <button type="button" class="phase-button" data-poly-phase="result">Result</button>
+                  </div>
+                  <p id="poly-phase-help" class="help-text">
+                    Choose a phase to see what the FFT circuit is doing for polynomial multiplication. FFT(A), FFT(B), and inverse FFT are the stages you can animate.
+                  </p>
+                </section>
+
+                <div class="poly-action-row">
+                  <button id="poly-compare-btn" type="button" class="transport-text-button transport-primary">Compare Naive vs FFT</button>
+                  <button id="poly-load-fft-btn" type="button" class="transport-text-button">Send Padded A To Frequency View</button>
                 </div>
 
-                <div class="size-picker">
-                  <span class="control-label size-picker-label">Input Size</span>
-                  <div id="size-selector" class="segmented-control" role="group" aria-label="FFT input size">
-                    <button type="button" class="segmented-button is-selected" data-size="8">n = 8</button>
-                    <button type="button" class="segmented-button" data-size="16">n = 16</button>
+                <div class="status-list poly-status-list" aria-label="Polynomial multiplication status">
+                  <div class="status-item">
+                    <span class="status-label">Status</span>
+                    <span id="poly-status-badge" class="status-value" data-state="idle">Waiting</span>
+                  </div>
+                  <div class="status-item">
+                    <span class="status-label">Padded FFT Size</span>
+                    <span id="poly-size-badge" class="status-value">--</span>
+                  </div>
+                  <div class="status-item">
+                    <span class="status-label">Comparison</span>
+                    <span id="poly-match-badge" class="comparison-badge comparison-badge-idle">Run Comparison</span>
                   </div>
                 </div>
 
-                <div class="button-row preset-grid" role="group" aria-label="FFT presets">
-                  <button type="button" class="button-secondary preset-button" data-preset="impulse">Impulse Signal</button>
-                  <button type="button" class="button-secondary preset-button" data-preset="single-tone">Single-Tone Signal</button>
-                  <button type="button" class="button-secondary preset-button" data-preset="mixed-frequency">Mixed-Frequency Signal</button>
-                  <button type="button" class="button-secondary preset-button" data-preset="simple-real">Simple Real Example</button>
-                  <button type="button" class="button-secondary preset-button" data-preset="random">Random Example</button>
-                </div>
-
-                <p id="preset-note" class="help-text">
-                  Presets regenerate for the selected size so the circuit always stays power-of-two.
+                <p id="poly-status-copy" class="help-text">
+                  Compare the same polynomial product with a nested-loop convolution and an FFT-based method.
                 </p>
-              </section>
+                <p id="poly-load-note" class="help-text">
+                  The frequency tab still exists for traditional FFT exploration, so you can send the padded coefficients of Polynomial A there when you want to compare views.
+                </p>
+              </div>
+
+              <div class="mode-panel" data-mode-panel="frequency" hidden>
+                <section class="control-section">
+                  <label class="control-label" for="custom-input">Custom Input</label>
+                  <textarea
+                    id="custom-input"
+                    class="input-field input-area"
+                    rows="4"
+                    placeholder="e.g. 1, 0, 0, 0, 0, 0, 0, 0 or 1+0i, 0+1i, -1, -i"
+                    aria-describedby="input-help"
+                  ></textarea>
+                  <p id="input-help" class="help-text" aria-live="polite">
+                    Enter exactly 8 or 16 comma-separated samples. Real and complex forms are both supported.
+                  </p>
+                </section>
+
+                <section class="control-section">
+                  <div class="section-head section-head-stack">
+                    <span class="section-kicker">Transform Inputs</span>
+                  </div>
+
+                  <div class="size-picker">
+                    <span class="control-label size-picker-label">Input Size</span>
+                    <div id="size-selector" class="segmented-control" role="group" aria-label="FFT input size">
+                      <button type="button" class="segmented-button is-selected" data-size="8">n = 8</button>
+                      <button type="button" class="segmented-button" data-size="16">n = 16</button>
+                    </div>
+                  </div>
+
+                  <div class="button-row preset-grid" role="group" aria-label="FFT presets">
+                    <button type="button" class="button-secondary preset-button" data-preset="impulse">Impulse Signal</button>
+                    <button type="button" class="button-secondary preset-button" data-preset="single-tone">Single-Tone Signal</button>
+                    <button type="button" class="button-secondary preset-button" data-preset="mixed-frequency">Mixed-Frequency Signal</button>
+                    <button type="button" class="button-secondary preset-button" data-preset="simple-real">Simple Real Example</button>
+                    <button type="button" class="button-secondary preset-button" data-preset="random">Random Example</button>
+                  </div>
+
+                  <p id="preset-note" class="help-text">
+                    Presets regenerate for the selected size so the circuit always stays power-of-two.
+                  </p>
+                </section>
+              </div>
 
               <section class="control-section">
                 <div class="section-head section-head-inline">
@@ -317,7 +402,6 @@
                 </div>
                 <input id="speed-range" type="range" min="1" max="5" value="3">
               </section>
-
             </div>
 
             <div class="status-list" aria-label="Session summary">
@@ -395,8 +479,8 @@
           <section id="visualizer-tool" class="panel network-area" aria-label="FFT circuit visualization">
             <div class="panel-header-row">
               <div>
-                <span class="panel-kicker">Visualizer</span>
-                <h2 class="panel-title">Layered Butterfly Circuit</h2>
+                <span id="visualizer-kicker" class="panel-kicker">Polynomial Workbench</span>
+                <h2 id="visualizer-title" class="panel-title">Follow the polynomial multiplication pipeline in one shared FFT circuit</h2>
               </div>
               <div class="legend-strip" aria-label="Visualization legend">
                 <div class="legend-item"><span class="legend-chip legend-chip-idle"></span><span>Idle Wire</span></div>
@@ -406,6 +490,43 @@
                 <div class="legend-item"><span class="legend-chip legend-chip-resolved"></span><span>Resolved Stage</span></div>
                 <div class="legend-item"><span class="legend-chip legend-chip-twiddle"></span><span>Twiddle Highlight</span></div>
               </div>
+            </div>
+
+            <div id="poly-pipeline-overview" class="pipeline-overview" aria-label="Polynomial multiplication pipeline">
+              <button type="button" class="pipeline-card" data-poly-phase="padding">
+                <span class="pipeline-card-step">Step 1</span>
+                <strong class="pipeline-card-title">Pad</strong>
+                <span class="pipeline-card-copy">Choose two polynomials and zero-pad them to a shared FFT size.</span>
+              </button>
+              <button type="button" class="pipeline-card is-active" data-poly-phase="fft-a">
+                <span class="pipeline-card-step">Step 2</span>
+                <strong class="pipeline-card-title">FFT(A)</strong>
+                <span class="pipeline-card-copy">Evaluate Polynomial A at the chosen roots of unity.</span>
+              </button>
+              <button type="button" class="pipeline-card" data-poly-phase="fft-b">
+                <span class="pipeline-card-step">Step 3</span>
+                <strong class="pipeline-card-title">FFT(B)</strong>
+                <span class="pipeline-card-copy">Evaluate Polynomial B at the same special points.</span>
+              </button>
+              <button type="button" class="pipeline-card" data-poly-phase="pointwise">
+                <span class="pipeline-card-step">Step 4</span>
+                <strong class="pipeline-card-title">Pointwise</strong>
+                <span class="pipeline-card-copy">Multiply matching values directly after both forward transforms.</span>
+              </button>
+              <button type="button" class="pipeline-card" data-poly-phase="inverse">
+                <span class="pipeline-card-step">Step 5</span>
+                <strong class="pipeline-card-title">Inverse FFT</strong>
+                <span class="pipeline-card-copy">Interpolate back from value form to coefficient form.</span>
+              </button>
+              <button type="button" class="pipeline-card" data-poly-phase="result">
+                <span class="pipeline-card-step">Step 6</span>
+                <strong class="pipeline-card-title">Result</strong>
+                <span class="pipeline-card-copy">Trim and round to reveal the final product coefficients.</span>
+              </button>
+            </div>
+
+            <div id="frequency-mode-banner" class="mode-banner" hidden>
+              This secondary tab keeps the classic FFT interpretation: load a signal, build the trace, and inspect how the layered butterflies produce transform bins.
             </div>
 
             <div class="action-strip">
@@ -520,8 +641,8 @@
               </div>
             </div>
 
-            <p class="transport-helper">
-              Hover over the controls for a quick hint. Build the trace first, then step or play through the butterfly circuit under the current stage highlight.
+            <p id="transport-helper" class="transport-helper">
+              Polynomial mode is selected. Build the active transform phase, then step through the butterfly circuit or switch phases to see padding, pointwise multiplication, and the final result.
             </p>
           </section>
         </main>
@@ -702,10 +823,10 @@
       <section id="polynomial-multiplication" class="section-shell lesson-story poly-section" aria-label="Polynomial multiplication with FFT">
         <div class="section-heading section-heading-spacious">
           <span class="panel-kicker">11. FFT For Polynomial Multiplication</span>
-          <h2 class="section-title">This is the payoff section where the whole lesson comes together</h2>
+          <h2 class="section-title">Keep the full polynomial pipeline and both results in view</h2>
           <p class="section-copy">
-            Write both polynomials as coefficient arrays, pad them, apply FFT to both, multiply the
-            resulting values pointwise, and then apply inverse FFT to recover the product coefficients.
+            The lab above is where you explore each phase interactively. This section keeps the whole
+            multiplication pipeline visible at once so you can compare the direct and FFT-based answers side by side.
           </p>
         </div>
 
@@ -714,69 +835,8 @@
           inverse FFT, then trim or round small floating-point noise.
         </div>
 
-        <div class="poly-grid">
-          <section class="panel poly-card" aria-labelledby="poly-controls-title">
-            <div class="panel-header-row">
-              <div>
-                <span class="panel-kicker">Inputs</span>
-                <h3 id="poly-controls-title" class="panel-title">Coefficient Form</h3>
-              </div>
-              <p class="card-copy">Enter real coefficients from constant term upward, such as <code>1, 2, 3</code> for <code>1 + 2x + 3x^2</code>.</p>
-            </div>
-
-            <div class="poly-input-grid">
-              <div class="control-section poly-input-card">
-                <label class="control-label" for="poly-input-a">Polynomial A Coefficients</label>
-                <textarea id="poly-input-a" class="input-field input-area" rows="3" placeholder="e.g. 1, 2, 3"></textarea>
-              </div>
-
-              <div class="control-section poly-input-card">
-                <label class="control-label" for="poly-input-b">Polynomial B Coefficients</label>
-                <textarea id="poly-input-b" class="input-field input-area" rows="3" placeholder="e.g. 2, 1"></textarea>
-              </div>
-            </div>
-
-            <div class="control-section">
-              <div class="section-head section-head-stack">
-                <span class="section-kicker">Preset Examples</span>
-              </div>
-              <div class="button-row preset-grid" role="group" aria-label="Polynomial multiplication presets">
-                <button type="button" class="preset-button" data-poly-preset="intro-example">Intro Example</button>
-                <button type="button" class="preset-button" data-poly-preset="larger-example">Larger Example</button>
-                <button type="button" class="preset-button" data-poly-preset="scaling-example">Scaling Example</button>
-              </div>
-              <p id="poly-preset-note" class="help-text">Choose a preset to fill both coefficient lists and compare naive vs FFT automatically.</p>
-            </div>
-
-            <div class="poly-action-row">
-              <button id="poly-compare-btn" type="button" class="transport-text-button transport-primary">Compare Naive vs FFT</button>
-              <button id="poly-load-fft-btn" type="button" class="transport-text-button">Load Padded Coefficients Into FFT Visualizer</button>
-            </div>
-
-            <div class="status-list poly-status-list" aria-label="Polynomial multiplication status">
-              <div class="status-item">
-                <span class="status-label">Status</span>
-                <span id="poly-status-badge" class="status-value" data-state="idle">Waiting</span>
-              </div>
-              <div class="status-item">
-                <span class="status-label">Padded FFT Size</span>
-                <span id="poly-size-badge" class="status-value">--</span>
-              </div>
-              <div class="status-item">
-                <span class="status-label">Comparison</span>
-                <span id="poly-match-badge" class="comparison-badge comparison-badge-idle">Run Comparison</span>
-              </div>
-            </div>
-
-            <p id="poly-status-copy" class="help-text">
-              Compare the same polynomial product with a nested-loop convolution and an FFT-based method.
-            </p>
-            <p id="poly-load-note" class="help-text">
-              The FFT visualizer displays one signal at a time, so this button loads the padded coefficients of Polynomial A into the main circuit workspace.
-            </p>
-          </section>
-
-          <section class="panel poly-card" aria-labelledby="poly-pipeline-title">
+        <div class="poly-grid poly-grid-single">
+          <section class="panel poly-card poly-summary-card" aria-labelledby="poly-pipeline-title">
             <div class="panel-header-row">
               <div>
                 <span class="panel-kicker">Pipeline</span>
