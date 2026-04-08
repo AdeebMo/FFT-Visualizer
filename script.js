@@ -1,5 +1,5 @@
-const DEFAULT_INPUT_HELP = "Enter exactly 8 or 16 comma-separated samples. Real and complex forms are both supported.";
-const READY_INPUT_HELP = "Valid signal detected. Build steps to generate the full FFT teaching trace.";
+const DEFAULT_INPUT_HELP = "Enter a length-8 or length-16 comma-separated signal. Real and complex forms are both supported.";
+const READY_INPUT_HELP = "Valid signal detected. Click Build Steps to generate the full FFT teaching trace.";
 const TOLERANCE = 1e-9;
 
 const SPEED_DELAYS = {
@@ -78,8 +78,10 @@ const LAB_MODES = {
       "Choose two polynomials, compare naive and FFT multiplication, and then inspect one pipeline phase at a time in the butterfly circuit.",
     visualizerKicker: "Polynomial Workbench",
     visualizerTitle: "Follow the polynomial multiplication pipeline in one shared FFT circuit",
+    buildHelp:
+      "Select FFT(A), FFT(B), or Inverse FFT to auto-build that trace. Use Build Steps if you want to restart the current phase from the beginning.",
     transportHelp:
-      "Polynomial mode is selected. Build the active transform phase, then step through the butterfly circuit or switch phases to see padding, pointwise multiplication, and the final result."
+      "Polynomial mode is selected. Step through the active trace below, or switch phases to inspect padding, pointwise multiplication, and the final result."
   },
   frequency: {
     title: "Frequency / Transform Workbench",
@@ -87,6 +89,8 @@ const LAB_MODES = {
       "Load one signal, build the trace, and watch the same butterfly circuit produce transform bins in the classic FFT interpretation.",
     visualizerKicker: "Frequency Workbench",
     visualizerTitle: "Inspect the FFT as a staged transform circuit for one signal at a time",
+    buildHelp:
+      "Choose a preset or enter a valid signal, then click Build Steps to generate the staged FFT trace for that input.",
     transportHelp:
       "Frequency mode is selected. Build the trace first, then step or play through the butterfly circuit under the current stage highlight."
   }
@@ -1133,6 +1137,7 @@ function cacheDom() {
   dom.speedRange = document.getElementById("speed-range");
   dom.speedValue = document.getElementById("speed-value");
   dom.buildButton = document.getElementById("build-btn");
+  dom.backButton = document.getElementById("back-btn");
   dom.stepButton = document.getElementById("step-btn");
   dom.playButton = document.getElementById("play-btn");
   dom.pauseButton = document.getElementById("pause-btn");
@@ -1153,6 +1158,7 @@ function cacheDom() {
   dom.visualizerKicker = document.getElementById("visualizer-kicker");
   dom.visualizerTitle = document.getElementById("visualizer-title");
   dom.transportHelper = document.getElementById("transport-helper");
+  dom.buildHelper = document.getElementById("build-helper");
   dom.frequencyModeBanner = document.getElementById("frequency-mode-banner");
   dom.pipelineOverview = document.getElementById("poly-pipeline-overview");
   dom.polyPhaseHelp = document.getElementById("poly-phase-help");
@@ -1202,6 +1208,9 @@ function cacheDom() {
   dom.polyNaiveCost = document.getElementById("poly-naive-cost");
   dom.polyFftResult = document.getElementById("poly-fft-result");
   dom.polyFftCost = document.getElementById("poly-fft-cost");
+  dom.frequencyOutputPanel = document.getElementById("frequency-output-panel");
+  dom.frequencyOutputSummary = document.getElementById("frequency-output-summary");
+  dom.frequencyOutputBody = document.getElementById("frequency-output-body");
 }
 
 // Check whether the optional polynomial multiplication lesson card is present in the current page.
@@ -1416,6 +1425,9 @@ function renderLabMode() {
   if (dom.transportHelper) {
     dom.transportHelper.textContent = modeConfig.transportHelp;
   }
+  if (dom.buildHelper) {
+    dom.buildHelper.textContent = modeConfig.buildHelp;
+  }
   if (dom.frequencyModeBanner) {
     dom.frequencyModeBanner.hidden = appState.mode !== "frequency";
   }
@@ -1531,6 +1543,9 @@ function setLabMode(mode) {
 
   if (mode === "polynomial") {
     refreshPolynomialModeState();
+    if (isAnimatablePolynomialPhase() && appState.polynomial.result && getActivePolynomialTraceSource()) {
+      buildTrace();
+    }
     return;
   }
 
@@ -1539,13 +1554,21 @@ function setLabMode(mode) {
 
 // Change which polynomial phase is shown in the shared workbench.
 function setPolynomialPhase(phase) {
-  if (!POLYNOMIAL_PHASES[phase] || appState.polynomial.selectedPhase === phase) {
+  if (!POLYNOMIAL_PHASES[phase]) {
+    return;
+  }
+
+  const samePhase = appState.polynomial.selectedPhase === phase;
+  if (samePhase && !(isPolynomialMode() && isAnimatablePolynomialPhase(phase))) {
     return;
   }
 
   appState.polynomial.selectedPhase = phase;
   if (isPolynomialMode()) {
     refreshPolynomialModeState();
+    if (isAnimatablePolynomialPhase(phase) && appState.polynomial.result && getActivePolynomialTraceSource()) {
+      buildTrace();
+    }
     return;
   }
   renderAll();
@@ -1556,9 +1579,11 @@ function updateButtons() {
     ? Boolean(getActivePolynomialTraceSource())
     : appState.inputValid;
   const hasTrace = appState.isBuilt && appState.steps.length > 0;
+  const atStart = !hasTrace || appState.currentStepIndex <= 0;
   const atEnd = hasTrace && appState.currentStepIndex >= appState.steps.length - 1;
 
   dom.buildButton.disabled = !hasValidInput || appState.isPlaying;
+  dom.backButton.disabled = atStart || appState.isPlaying;
   dom.stepButton.disabled = !hasTrace || appState.isPlaying || atEnd;
   dom.playButton.disabled = !hasTrace || appState.isPlaying || atEnd;
   dom.pauseButton.disabled = !appState.isPlaying;
@@ -1689,7 +1714,7 @@ function renderActionStrip() {
   }
 
   dom.actionTitle.textContent = "Waiting for input.";
-  dom.actionCopy.textContent = "Enter a valid power-of-two signal to preview the circuit and build the trace.";
+  dom.actionCopy.textContent = "Enter a length-8 or length-16 signal to preview the circuit and build the trace.";
   dom.actionPhase.textContent = "Phase: Idle";
   dom.actionStage.textContent = "Stage: --";
   dom.actionIndices.textContent = "Indices: --";
@@ -1868,6 +1893,52 @@ function renderComparison() {
   });
 }
 
+// Show the final FFT output bins in frequency mode once the trace reaches the end.
+function renderFrequencyOutput() {
+  if (!dom.frequencyOutputPanel || !dom.frequencyOutputSummary || !dom.frequencyOutputBody) {
+    return;
+  }
+
+  const isFrequencyMode = appState.mode === "frequency";
+  dom.frequencyOutputPanel.hidden = !isFrequencyMode;
+  if (!isFrequencyMode) {
+    return;
+  }
+
+  dom.frequencyOutputBody.innerHTML = "";
+
+  if (!appState.inputValid || !appState.comparison) {
+    dom.frequencyOutputSummary.textContent = "Enter a valid signal to prepare the final FFT output table.";
+    const row = document.createElement("tr");
+    row.innerHTML = '<td colspan="4" class="cell-muted">No signal loaded yet.</td>';
+    dom.frequencyOutputBody.appendChild(row);
+    return;
+  }
+
+  const isComplete = appState.isBuilt && appState.steps.length > 0 && appState.currentStepIndex >= appState.steps.length - 1;
+  if (!isComplete) {
+    dom.frequencyOutputSummary.textContent = appState.isBuilt
+      ? "Finish the animation or jump to the last step to reveal the final FFT bins."
+      : "Build the trace, then run it to the end to reveal the final FFT bins.";
+    const row = document.createElement("tr");
+    row.innerHTML = '<td colspan="4" class="cell-muted">Final FFT bins appear here after the trace completes.</td>';
+    dom.frequencyOutputBody.appendChild(row);
+    return;
+  }
+
+  dom.frequencyOutputSummary.textContent = "The completed transform is listed below with real, imaginary, and magnitude values for each output bin.";
+  appState.comparison.iterativeOutput.forEach((value, index) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${index}</td>
+      <td>${formatNumber(value.re, 4)}</td>
+      <td>${formatNumber(value.im, 4)}</td>
+      <td>${formatNumber(magnitudeComplex(value), 4)}</td>
+    `;
+    dom.frequencyOutputBody.appendChild(row);
+  });
+}
+
 function createBitChip(index, meta, stateClass) {
   const wrapper = document.createElement("div");
   wrapper.className = "bit-chip";
@@ -1983,12 +2054,13 @@ function renderSvgPlaceholder(message) {
 
 // Draw a simple row-based SVG summary for non-butterfly polynomial phases.
 function renderPolynomialRowsView(title, subtitle, rows) {
-  const cellWidth = 94;
-  const labelWidth = 172;
-  const rowHeight = 92;
-  const left = 60;
-  const top = 112;
   const maxRowLength = Math.max(...rows.map((row) => row.values.length), 1);
+  const compactRows = maxRowLength > 8;
+  const cellWidth = compactRows ? 82 : 92;
+  const labelWidth = compactRows ? 152 : 172;
+  const rowHeight = compactRows ? 80 : 92;
+  const left = compactRows ? 44 : 60;
+  const top = 112;
   const width = left + labelWidth + maxRowLength * cellWidth + 80;
   const height = top + rows.length * rowHeight + 70;
 
@@ -2043,9 +2115,9 @@ function renderPolynomialRowsView(title, subtitle, rows) {
       dom.fftSvg.appendChild(
         createSvgNode("rect", {
           class: "fft-value-pill-bg is-resolved",
-          x: x - 42,
+          x: x - (compactRows ? 36 : 42),
           y: y - 17,
-          width: 84,
+          width: compactRows ? 72 : 84,
           height: 30,
           rx: 15,
           ry: 15
@@ -2222,14 +2294,15 @@ function renderVisualization() {
   const size = renderData.size;
   const depth = renderData.depth;
   const stageDefinitions = buildStageDefinitions(size);
-  const rowSpacing = size === 16 ? 38 : 58;
-  const topMargin = 94;
-  const leftMargin = 82;
-  const columnSpacing = size === 16 ? 188 : 214;
-  const pillWidth = size === 16 ? 116 : 126;
-  const pillHeight = 28;
-  const totalWidth = leftMargin + (depth + 1) * columnSpacing + 240;
-  const totalHeight = topMargin + size * rowSpacing + 70;
+  const isCompactLayout = size === 16;
+  const rowSpacing = isCompactLayout ? 34 : 50;
+  const topMargin = 88;
+  const leftMargin = 52;
+  const columnSpacing = isCompactLayout ? 162 : 188;
+  const pillWidth = isCompactLayout ? 98 : 112;
+  const pillHeight = 26;
+  const totalWidth = leftMargin + (depth + 1) * columnSpacing + 180;
+  const totalHeight = topMargin + size * rowSpacing + 58;
 
   dom.fftSvg.innerHTML = "";
   dom.fftSvg.setAttribute("viewBox", `0 0 ${totalWidth} ${totalHeight}`);
@@ -2241,14 +2314,14 @@ function renderVisualization() {
       label: labels.inputLabel || "Input",
       meta: labels.inputMeta || "x[i]",
       values: renderData.originalValues,
-      x: leftMargin + 80
+      x: leftMargin + 64
     },
     {
       key: "bit-reversal",
       label: labels.bitLabel || "Bit-Reversed",
       meta: labels.bitMeta || "A[r]",
       values: renderData.bitReversalProgress,
-      x: leftMargin + 80 + columnSpacing
+      x: leftMargin + 64 + columnSpacing
     }
   ];
 
@@ -2259,7 +2332,7 @@ function renderVisualization() {
       label: index === depth - 1 ? (labels.outputLabel || `${stage.label} / Output`) : stage.label,
       meta: index === depth - 1 ? (labels.outputMeta || stage.metaLabel) : stage.metaLabel,
       values: renderData.stageColumns[index],
-      x: leftMargin + 80 + columnSpacing * (index + 2)
+      x: leftMargin + 64 + columnSpacing * (index + 2)
     });
   });
 
@@ -2653,6 +2726,7 @@ function renderAll() {
   renderComparison();
   renderBitReversalPanel();
   renderVisualization();
+  renderFrequencyOutput();
   renderHistory();
   renderPolynomialSection();
   updateButtons();
@@ -2781,6 +2855,10 @@ function comparePolynomialInputs() {
     appState.polynomial.statusText = "Invalid Input";
     appState.polynomial.statusTone = "error";
     appState.polynomial.statusCopy = parsedA.message;
+    if (isPolynomialMode()) {
+      refreshPolynomialModeState();
+      return;
+    }
     renderAll();
     return;
   }
@@ -2790,6 +2868,10 @@ function comparePolynomialInputs() {
     appState.polynomial.statusText = "Invalid Input";
     appState.polynomial.statusTone = "error";
     appState.polynomial.statusCopy = parsedB.message;
+    if (isPolynomialMode()) {
+      refreshPolynomialModeState();
+      return;
+    }
     renderAll();
     return;
   }
@@ -2802,6 +2884,9 @@ function comparePolynomialInputs() {
     : "The two methods disagreed, which means something needs debugging.";
   if (isPolynomialMode()) {
     refreshPolynomialModeState();
+    if (isAnimatablePolynomialPhase() && getActivePolynomialTraceSource()) {
+      buildTrace();
+    }
     return;
   }
   renderAll();
@@ -2872,6 +2957,16 @@ function moveToStep(stepIndex) {
     setStatus("Paused", "paused");
   }
 
+  renderAll();
+}
+
+function stepBackward() {
+  if (!appState.isBuilt || appState.currentStepIndex <= 0) {
+    return;
+  }
+
+  appState.currentStepIndex -= 1;
+  setStatus("Step-by-step", "paused");
   renderAll();
 }
 
@@ -2973,6 +3068,7 @@ function bindEvents() {
   });
 
   dom.buildButton.addEventListener("click", buildTrace);
+  dom.backButton.addEventListener("click", stepBackward);
   dom.stepButton.addEventListener("click", stepForward);
   dom.playButton.addEventListener("click", startPlayback);
   dom.pauseButton.addEventListener("click", pausePlayback);
