@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Efficient FFT Circuits | Teaching Studio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <div class="container">
+      <header class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow-row">
+            <span class="brand-badge">FFT Circuit Studio</span>
+            <span class="eyebrow-tag">Interactive radix-2 teaching lab</span>
+          </div>
+
+          <h1 class="page-title">Efficient FFT circuits explained as layered butterfly networks.</h1>
+          <p class="page-subtitle">
+            Follow bit-reversal, twiddle factors, and stage-by-stage butterfly updates in a
+            premium visual workspace designed to teach why the Fast Fourier Transform runs in
+            <strong>O(n log n)</strong> work with only <strong>O(log n)</strong> circuit depth.
+          </p>
+
+          <div class="hero-chip-row" aria-label="Page navigation">
+            <a class="hero-chip hero-chip-link" href="#overview">Overview</a>
+            <a class="hero-chip hero-chip-link" href="#concept">Concept</a>
+            <a class="hero-chip hero-chip-link hero-chip-tool" href="#visualizer-tool">Visualizer Tool</a>
+          </div>
+        </div>
+
+        <div class="hero-panel">
+          <div class="hero-panel-header">
+            <span class="panel-kicker">Why this matters</span>
+            <h2 class="hero-panel-title">FFT turns recursive frequency splitting into a clean hardware-friendly circuit.</h2>
+          </div>
+
+          <div class="hero-stat-grid">
+            <article class="hero-stat">
+              <span class="hero-stat-label">Circuit structure</span>
+              <strong class="hero-stat-value">Layered butterflies</strong>
+              <p class="hero-stat-copy">each stage mixes fixed index pairs in parallel.</p>
+            </article>
+
+            <article class="hero-stat">
+              <span class="hero-stat-label">Key prerequisite</span>
+              <strong class="hero-stat-value">Bit-reversal order</strong>
+              <p class="hero-stat-copy">the iterative FFT reorders inputs so every later stage works in place.</p>
+            </article>
+
+            <article class="hero-stat">
+              <span class="hero-stat-label">Complexity</span>
+              <strong class="hero-stat-value">O(n log n)</strong>
+              <p class="hero-stat-copy">dramatically better than the direct O(n^2) transform.</p>
+            </article>
+          </div>
+        </div>
+      </header>
+
+      <section id="overview" class="overview-section" aria-label="Overview">
+        <article class="feature-card overview-card">
+          <span class="feature-kicker">Overview</span>
+          <h2 class="panel-heading">What this tool teaches</h2>
+          <div class="card-body">
+            <p>
+              This standalone teaching tool focuses on the iterative radix-2 Cooley-Tukey FFT as
+              a circuit. It shows how inputs are first loaded into bit-reversed order, then
+              processed by butterfly layers that apply twiddle factors and update frequency values
+              in place.
+            </p>
+            <ul class="mini-list">
+              <li><strong>Bit-reversal first:</strong> see why iterative FFT needs a special input order before any butterfly stage begins.</li>
+              <li><strong>Butterfly flow:</strong> inspect the exact pair of positions, twiddle factor, and updated upper/lower outputs at every step.</li>
+              <li><strong>Same math as recursion:</strong> compare iterative and recursive FFT outputs and confirm they match numerically.</li>
+            </ul>
+          </div>
+        </article>
+      </section>
+
+      <section id="concept" class="intro-grid" aria-label="FFT concept cards">
+        <article class="feature-card">
+          <span class="feature-kicker">Concept</span>
+          <h3 class="panel-heading">How the layered circuit works</h3>
+          <div class="card-body">
+            <p>
+              At stage <code>s</code>, the circuit works on blocks of size <code>2^s</code>. Each
+              butterfly combines one upper wire and one lower wire using a twiddle factor
+              <code>w = e^(-2pi i j / m)</code>, then writes updated outputs back to the same pair of
+              positions.
+            </p>
+            <ol class="mini-list">
+              <li><strong>Load:</strong> place the input into bit-reversed order.</li>
+              <li><strong>Mix:</strong> compute <code>t = w * lower</code> for each butterfly.</li>
+              <li><strong>Update:</strong> write <code>upper = u + t</code> and <code>lower = u - t</code>.</li>
+            </ol>
+          </div>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-kicker">Worked Example</span>
+          <h3 class="panel-heading">Anchored to the simple real-valued preset</h3>
+          <div class="card-body">
+            <p>
+              Use the <strong>Simple Real Example</strong> preset to study a small signal with a mix
+              of positive, zero, and negative samples. For <code>n = 8</code>, the circuit has
+              <strong>3 stages</strong> and <strong>12 butterflies</strong>, so every update is still
+              visible enough to learn from.
+            </p>
+            <div class="phase-list">
+              <div><strong>Sample input:</strong> [3, 1, 0, -1, 2, 0, 1, -2]</div>
+              <div><strong>Bit-reversed source order:</strong> [0, 4, 2, 6, 1, 5, 3, 7]</div>
+              <div><strong>Circuit depth:</strong> 3 butterfly layers, each parallel across the full width.</div>
+              <div><strong>Learning goal:</strong> watch how local pair updates build the global frequency bins.</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-kicker">Complexity</span>
+          <h3 class="panel-heading">Why FFT is efficient</h3>
+          <div class="card-body">
+            <p>
+              A direct Discrete Fourier Transform compares each output frequency against every input
+              sample, which costs <code>O(n^2)</code>. FFT reuses symmetry and factorization, so the
+              same transform is built from <code>log2(n)</code> layers of <code>n / 2</code>
+              butterflies each.
+            </p>
+            <ul class="mini-list">
+              <li><strong>Work:</strong> <code>n / 2</code> butterflies per stage times <code>log2(n)</code> stages gives <code>O(n log n)</code>.</li>
+              <li><strong>Depth:</strong> the circuit has only <code>log2(n)</code> sequential layers.</li>
+              <li><strong>Parallel view:</strong> butterflies inside a single stage can run at the same time.</li>
+            </ul>
+          </div>
+        </article>
+      </section>
+
+      <div class="layout">
+        <aside class="control-column" aria-label="Control and explanation panels">
+          <section class="panel control-panel">
+            <div class="panel-section">
+              <span class="panel-kicker">Workspace</span>
+              <h2 class="panel-title">Configure The FFT Input</h2>
+            </div>
+
+            <div class="control-stack">
+              <section class="control-section">
+                <label class="control-label" for="custom-input">Custom Input</label>
+                <textarea
+                  id="custom-input"
+                  class="input-field input-area"
+                  rows="4"
+                  placeholder="e.g. 1, 0, 0, 0, 0, 0, 0, 0 or 1+0i, 0+1i, -1, -i"
+                  aria-describedby="input-help"
+                ></textarea>
+                <p id="input-help" class="help-text" aria-live="polite">
+                  Enter exactly 8 or 16 comma-separated samples. Real and complex forms are both supported.
+                </p>
+              </section>
+
+              <section class="control-section">
+                <div class="section-head section-head-stack">
+                  <span class="section-kicker">Sample Inputs</span>
+                </div>
+
+                <div class="size-picker">
+                  <span class="control-label size-picker-label">Input Size</span>
+                  <div id="size-selector" class="segmented-control" role="group" aria-label="FFT input size">
+                    <button type="button" class="segmented-button is-selected" data-size="8">n = 8</button>
+                    <button type="button" class="segmented-button" data-size="16">n = 16</button>
+                  </div>
+                </div>
+
+                <div class="button-row preset-grid" role="group" aria-label="FFT presets">
+                  <button type="button" class="button-secondary preset-button" data-preset="impulse">Impulse Signal</button>
+                  <button type="button" class="button-secondary preset-button" data-preset="single-tone">Single-Tone Signal</button>
+                  <button type="button" class="button-secondary preset-button" data-preset="mixed-frequency">Mixed-Frequency Signal</button>
+                  <button type="button" class="button-secondary preset-button" data-preset="simple-real">Simple Real Example</button>
+                  <button type="button" class="button-secondary preset-button" data-preset="random">Random Example</button>
+                </div>
+
+                <p id="preset-note" class="help-text">
+                  Presets regenerate for the selected size so the circuit always stays power-of-two.
+                </p>
+              </section>
+
+              <section class="control-section">
+                <div class="section-head section-head-inline">
+                  <label class="control-label" for="speed-range">Playback Speed</label>
+                  <span class="range-chip"><span id="speed-value">3x</span><span>Speed</span></span>
+                </div>
+                <input id="speed-range" type="range" min="1" max="5" value="3">
+              </section>
+
+              <section class="control-section">
+                <span class="control-label">Playback Controls</span>
+                <div class="button-row transport-text-buttons" aria-label="Playback controls">
+                  <button id="build-btn" type="button" class="transport-text-button transport-primary">Build Steps</button>
+                  <button id="step-btn" type="button" class="transport-text-button">Step</button>
+                  <button id="play-btn" type="button" class="transport-text-button transport-primary transport-play">Play</button>
+                  <button id="pause-btn" type="button" class="transport-text-button">Pause</button>
+                  <button id="reset-btn" type="button" class="transport-text-button">Reset</button>
+                </div>
+              </section>
+            </div>
+
+            <div class="status-list" aria-label="Session summary">
+              <div class="status-item">
+                <span class="status-label">Status</span>
+                <span id="status-value" class="status-value" data-state="idle">Idle</span>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Step Counter</span>
+                <span id="session-step-counter" class="status-value">0 / 0</span>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Input Size</span>
+                <span id="input-size-value" class="status-value">8</span>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Phase</span>
+                <span id="phase-value" class="status-value">Waiting</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel info-panel" aria-labelledby="counters-title">
+            <div class="panel-header-row">
+              <div>
+                <span class="panel-kicker">Counters</span>
+                <h3 id="counters-title" class="panel-title">Live Statistics</h3>
+              </div>
+              <p class="card-copy">Track circuit work, depth, and progress while the trace runs.</p>
+            </div>
+
+            <dl class="metric-grid">
+              <div class="metric-card">
+                <dt>Total Butterflies</dt>
+                <dd id="counter-total-butterflies">0</dd>
+              </div>
+              <div class="metric-card">
+                <dt>Processed</dt>
+                <dd id="counter-processed-butterflies">0</dd>
+              </div>
+              <div class="metric-card">
+                <dt>Total Stages</dt>
+                <dd id="counter-total-stages">0</dd>
+              </div>
+              <div class="metric-card">
+                <dt>Current Stage</dt>
+                <dd id="counter-current-stage">0</dd>
+              </div>
+              <div class="metric-card">
+                <dt>Twiddle Multiplies</dt>
+                <dd id="counter-twiddle-mults">0</dd>
+              </div>
+              <div class="metric-card">
+                <dt>Add/Sub Updates</dt>
+                <dd id="counter-add-sub">0</dd>
+              </div>
+              <div class="metric-card">
+                <dt>n Value</dt>
+                <dd id="counter-size">0</dd>
+              </div>
+              <div class="metric-card">
+                <dt>Depth</dt>
+                <dd id="counter-depth">0</dd>
+              </div>
+              <div class="metric-card">
+                <dt>Est. Work</dt>
+                <dd id="counter-estimate">0</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="panel info-panel" aria-labelledby="pseudocode-title">
+            <div class="panel-header-row">
+              <div>
+                <span class="panel-kicker">Pseudocode</span>
+                <h3 id="pseudocode-title" class="panel-title">Iterative FFT Walkthrough</h3>
+              </div>
+              <p class="card-copy">The current step highlights one specific line in the algorithm.</p>
+            </div>
+
+            <div id="pseudocode-body" class="pseudocode-body" aria-live="polite"></div>
+          </section>
+
+          <section class="panel info-panel" aria-labelledby="step-explanation-title">
+            <div class="panel-header-row">
+              <div>
+                <span class="panel-kicker">Step Explanation</span>
+                <h3 id="step-explanation-title" class="panel-title">Student-Friendly Narration</h3>
+              </div>
+              <p class="card-copy">Every step explains the exact indices, twiddle factor, and updated values.</p>
+            </div>
+
+            <div class="explanation-stack">
+              <p id="step-explanation" class="explanation-copy">Build steps to begin the guided explanation.</p>
+              <div class="formula-card">
+                <span class="formula-label">Current formula</span>
+                <code id="step-formula">No butterfly selected yet.</code>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel info-panel" aria-labelledby="comparison-title">
+            <div class="panel-header-row">
+              <div>
+                <span class="panel-kicker">Recursive Comparison</span>
+                <h3 id="comparison-title" class="panel-title">Iterative vs Recursive FFT</h3>
+              </div>
+              <p class="card-copy">The circuit form and the recursive form should compute the same output bins.</p>
+            </div>
+
+            <div class="comparison-summary">
+              <span id="comparison-status" class="comparison-badge comparison-badge-idle">Waiting for valid input</span>
+              <p id="comparison-summary" class="comparison-copy">
+                Load a valid signal to compare iterative and recursive FFT outputs.
+              </p>
+            </div>
+
+            <div class="comparison-table-wrap">
+              <table class="comparison-table">
+                <thead>
+                  <tr>
+                    <th scope="col">k</th>
+                    <th scope="col">Iterative</th>
+                    <th scope="col">Recursive</th>
+                    <th scope="col">|diff|</th>
+                  </tr>
+                </thead>
+                <tbody id="comparison-body">
+                  <tr>
+                    <td colspan="4" class="cell-muted">No comparison yet.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </aside>
+
+        <main class="workspace-main">
+          <section id="visualizer-tool" class="panel network-area" aria-label="FFT circuit visualization">
+            <div class="panel-header-row">
+              <div>
+                <span class="panel-kicker">Visualizer</span>
+                <h2 class="panel-title">Layered Butterfly Circuit</h2>
+              </div>
+              <div class="legend-strip" aria-label="Visualization legend">
+                <div class="legend-item"><span class="legend-chip legend-chip-idle"></span><span>Idle Wire</span></div>
+                <div class="legend-item"><span class="legend-chip legend-chip-active"></span><span>Active Butterfly</span></div>
+                <div class="legend-item"><span class="legend-chip legend-chip-stage"></span><span>Current Stage</span></div>
+                <div class="legend-item"><span class="legend-chip legend-chip-bit"></span><span>Bit-Reversal Move</span></div>
+                <div class="legend-item"><span class="legend-chip legend-chip-resolved"></span><span>Resolved Stage</span></div>
+                <div class="legend-item"><span class="legend-chip legend-chip-twiddle"></span><span>Twiddle Highlight</span></div>
+              </div>
+            </div>
+
+            <div class="action-strip">
+              <div class="action-copy">
+                <span class="action-label">Current action</span>
+                <h3 id="action-title" class="action-title">Waiting for input.</h3>
+                <p id="action-copy" class="action-text">Enter a valid power-of-two signal to preview the circuit and build the trace.</p>
+              </div>
+
+              <div class="action-meta">
+                <div class="action-chip-row">
+                  <span class="action-chip" id="action-phase">Phase: Idle</span>
+                  <span class="action-chip" id="action-stage">Stage: --</span>
+                  <span class="action-chip" id="action-indices">Indices: --</span>
+                  <span class="action-chip" id="action-twiddle">Twiddle: --</span>
+                </div>
+                <div id="diagram-step-counter" class="step-counter">0 / 0 steps</div>
+              </div>
+            </div>
+
+            <section class="bit-reversal-panel" aria-labelledby="bit-reversal-title">
+              <div class="bit-reversal-header">
+                <div>
+                  <span class="panel-kicker">Bit-Reversal</span>
+                  <h3 id="bit-reversal-title" class="panel-title">Why iterative FFT reorders the input first</h3>
+                </div>
+                <p class="bit-reversal-copy">
+                  Reversing binary indices places even/odd recursion layers into the correct in-place circuit order.
+                </p>
+              </div>
+
+              <div class="bit-reversal-grid">
+                <div class="bit-reversal-row">
+                  <span class="bit-row-label">Original index order</span>
+                  <div id="bit-original-row" class="bit-chip-row" aria-live="polite"></div>
+                </div>
+                <div class="bit-reversal-row">
+                  <span class="bit-row-label">Bit-reversed load order</span>
+                  <div id="bit-reversed-row" class="bit-chip-row" aria-live="polite"></div>
+                </div>
+              </div>
+
+              <p id="bit-reversal-note" class="bit-reversal-note">
+                Build the trace to step through each reversed-binary mapping.
+              </p>
+            </section>
+
+            <div class="network-visual">
+              <svg id="fft-svg" class="network-svg" viewBox="0 0 1280 680" role="img" aria-labelledby="fft-svg-title fft-svg-desc">
+                <title id="fft-svg-title">FFT circuit visualization</title>
+                <desc id="fft-svg-desc">Layered butterfly network showing bit-reversal and iterative FFT stages.</desc>
+              </svg>
+            </div>
+          </section>
+
+          <section class="panel history-card" aria-labelledby="history-title">
+            <div class="panel-header-row history-header">
+              <div>
+                <span class="panel-kicker">Trace</span>
+                <h3 id="history-title" class="panel-title">Step History</h3>
+              </div>
+              <p class="history-copy">
+                Click any row to jump directly to that point in the lesson and resync the circuit view.
+              </p>
+            </div>
+
+            <div class="history-container">
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th scope="col" class="history-col-step">Step</th>
+                    <th scope="col" class="history-col-phase">Phase</th>
+                    <th scope="col" class="history-col-stage">Stage</th>
+                    <th scope="col" class="history-col-indices">Indices</th>
+                    <th scope="col" class="history-col-twiddle">Twiddle</th>
+                    <th scope="col" class="history-col-action">Action</th>
+                    <th scope="col" class="history-col-result">Result Snapshot</th>
+                  </tr>
+                </thead>
+                <tbody id="history-body">
+                  <tr>
+                    <td colspan="7" class="cell-muted">No trace yet. Build steps to populate the FFT history.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </main>
+      </div>
+
+      <section id="key-concepts" class="key-concepts-section" aria-label="Key concepts">
+        <div class="section-heading">
+          <span class="panel-kicker">Key Concepts</span>
+          <h2 class="section-title">The ideas students should leave with</h2>
+          <p class="section-copy">
+            The visualization is designed to connect the algebra, the circuit layout, and the runtime advantage.
+          </p>
+        </div>
+
+        <div class="concept-card-grid">
+          <article class="feature-card concept-card">
+            <h3 class="panel-heading">Butterfly</h3>
+            <p>A butterfly mixes two values at a time, creating the upper and lower outputs that feed the next stage.</p>
+          </article>
+
+          <article class="feature-card concept-card">
+            <h3 class="panel-heading">Bit Reversal</h3>
+            <p>Reversing binary indices aligns the iterative in-place schedule with the recursive even/odd decomposition.</p>
+          </article>
+
+          <article class="feature-card concept-card">
+            <h3 class="panel-heading">Twiddle Factors</h3>
+            <p>The complex roots of unity rotate lower-branch values so each stage contributes the correct phase information.</p>
+          </article>
+
+          <article class="feature-card concept-card">
+            <h3 class="panel-heading">Iterative vs Recursive</h3>
+            <p>The layered circuit is just the recursive FFT reorganized into fixed stages that are easier to implement in hardware.</p>
+          </article>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
