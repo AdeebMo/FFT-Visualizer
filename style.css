@@ -379,17 +379,99 @@ code {
   margin-bottom: 28px;
 }
 
+.section-shell {
+  position: relative;
+}
+
+.section-shell + .section-shell {
+  margin-top: 42px;
+  padding-top: 34px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.learn-section,
+.lab-section {
+  display: grid;
+  gap: 24px;
+}
+
+.section-heading-spacious {
+  display: grid;
+  gap: 12px;
+  max-width: 920px;
+  margin-bottom: 0;
+}
+
+.lesson-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.lesson-grid-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lesson-grid-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lesson-card,
+.lab-support-card {
+  min-height: 100%;
+}
+
+.key-concepts-card {
+  display: grid;
+  gap: 18px;
+}
+
+.lesson-concepts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.concept-pill-card {
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.concept-pill-card h4 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.concept-pill-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.94rem;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(380px, 430px) minmax(0, 1fr);
   gap: 24px;
   align-items: start;
+  margin-bottom: 24px;
 }
 
 .control-column,
 .workspace-main {
   display: grid;
   gap: 22px;
+}
+
+.lab-support-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  align-items: start;
+}
+
+.lab-support-wide {
+  grid-column: 1 / -1;
 }
 
 .panel {
@@ -1033,7 +1115,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .history-container {
-  max-height: 540px;
+  max-height: 440px;
 }
 
 .history-table tbody tr {
@@ -1078,8 +1160,90 @@ input[type="range"]::-moz-range-thumb {
   color: #d6ecff;
 }
 
-.key-concepts-section {
-  margin-top: 30px;
+.poly-section {
+  margin-top: 8px;
+}
+
+.poly-grid,
+.poly-results-grid,
+.poly-input-grid,
+.poly-expression-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.poly-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  margin-bottom: 22px;
+}
+
+.poly-results-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.poly-card {
+  display: grid;
+  gap: 18px;
+}
+
+.poly-input-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.poly-input-card {
+  min-height: 100%;
+}
+
+.poly-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.poly-action-row .transport-text-button {
+  flex: 1 1 220px;
+}
+
+.poly-status-list {
+  margin-top: 2px;
+}
+
+.poly-pipeline-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 22px;
+  color: var(--text-secondary);
+}
+
+.poly-pipeline-list li {
+  padding-right: 8px;
+}
+
+.poly-result-banner {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(circle at top left, rgba(90, 169, 255, 0.14), transparent 42%),
+    rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(90, 169, 255, 0.18);
+}
+
+.poly-result-banner code {
+  color: #dff2ff;
+  font-size: 1rem;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.poly-expression-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.poly-method-card {
+  min-height: 100%;
 }
 
 .section-heading {
@@ -1267,8 +1431,8 @@ input[type="range"]::-moz-range-thumb {
 
 @media (max-width: 1270px) {
   .hero,
-  .intro-grid,
-  .concept-card-grid {
+  .lesson-grid-three,
+  .poly-results-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1279,6 +1443,16 @@ input[type="range"]::-moz-range-thumb {
 
 @media (max-width: 980px) {
   .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .lesson-grid-two,
+  .lesson-grid-three,
+  .lesson-concepts-grid,
+  .lab-support-grid,
+  .poly-grid,
+  .poly-input-grid,
+  .poly-expression-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1313,8 +1487,12 @@ input[type="range"]::-moz-range-thumb {
   }
 
   .metric-grid,
-  .concept-card-grid {
+  .lesson-concepts-grid {
     grid-template-columns: 1fr;
+  }
+
+  .poly-action-row .transport-text-button {
+    flex: 1 1 100%;
   }
 
   .transport-text-button,

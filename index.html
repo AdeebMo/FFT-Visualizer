@@ -13,129 +13,367 @@
         <div class="hero-copy">
           <div class="eyebrow-row">
             <span class="brand-badge">FFT Circuit Studio</span>
-            <span class="eyebrow-tag">Interactive radix-2 teaching lab</span>
+            <span class="eyebrow-tag">Beginner-friendly Algorithms II teaching tool</span>
           </div>
 
-          <h1 class="page-title">Efficient FFT circuits explained as layered butterfly networks.</h1>
+          <h1 class="page-title">Learn why FFT is fast, then watch every butterfly stage happen.</h1>
           <p class="page-subtitle">
-            Follow bit-reversal, twiddle factors, and stage-by-stage butterfly updates in a
-            premium visual workspace designed to teach why the Fast Fourier Transform runs in
-            <strong>O(n log n)</strong> work with only <strong>O(log n)</strong> circuit depth.
+            This tool teaches the Fast Fourier Transform as a clear visual story. Start with the
+            big idea, learn how bit-reversal and butterflies work, then step through the circuit to
+            see why FFT beats the naive <strong>O(n^2)</strong> approach with
+            <strong>O(n log n)</strong> work.
           </p>
 
           <div class="hero-chip-row" aria-label="Page navigation">
-            <a class="hero-chip hero-chip-link" href="#overview">Overview</a>
-            <a class="hero-chip hero-chip-link" href="#concept">Concept</a>
-            <a class="hero-chip hero-chip-link hero-chip-tool" href="#visualizer-tool">Visualizer Tool</a>
+            <a class="hero-chip hero-chip-link" href="#learn-fft">Learn FFT</a>
+            <a class="hero-chip hero-chip-link" href="#polynomial-multiplication">Polynomial Multiplication</a>
+            <a class="hero-chip hero-chip-link hero-chip-tool" href="#fft-lab">See The Lab</a>
           </div>
         </div>
 
         <div class="hero-panel">
           <div class="hero-panel-header">
-            <span class="panel-kicker">Why this matters</span>
-            <h2 class="hero-panel-title">FFT turns recursive frequency splitting into a clean hardware-friendly circuit.</h2>
+            <span class="panel-kicker">Three things to watch for</span>
+            <h2 class="hero-panel-title">FFT becomes much easier to trust when you can see the same pattern repeat stage by stage.</h2>
           </div>
 
           <div class="hero-stat-grid">
             <article class="hero-stat">
-              <span class="hero-stat-label">Circuit structure</span>
-              <strong class="hero-stat-value">Layered butterflies</strong>
-              <p class="hero-stat-copy">each stage mixes fixed index pairs in parallel.</p>
+              <span class="hero-stat-label">Bit-reversal</span>
+              <strong class="hero-stat-value">Reorder first</strong>
+              <p class="hero-stat-copy">the input is rearranged once so the later in-place stages line up cleanly.</p>
             </article>
 
             <article class="hero-stat">
-              <span class="hero-stat-label">Key prerequisite</span>
-              <strong class="hero-stat-value">Bit-reversal order</strong>
-              <p class="hero-stat-copy">the iterative FFT reorders inputs so every later stage works in place.</p>
+              <span class="hero-stat-label">Butterfly stages</span>
+              <strong class="hero-stat-value">Mix in layers</strong>
+              <p class="hero-stat-copy">each stage combines fixed pairs and passes updated values forward.</p>
             </article>
 
             <article class="hero-stat">
-              <span class="hero-stat-label">Complexity</span>
+              <span class="hero-stat-label">Efficiency</span>
               <strong class="hero-stat-value">O(n log n)</strong>
-              <p class="hero-stat-copy">dramatically better than the direct O(n^2) transform.</p>
+              <p class="hero-stat-copy">the circuit uses far less work than comparing every input to every output.</p>
             </article>
           </div>
         </div>
       </header>
 
-      <section id="overview" class="overview-section" aria-label="Overview">
-        <article class="feature-card overview-card">
-          <span class="feature-kicker">Overview</span>
-          <h2 class="panel-heading">What this tool teaches</h2>
-          <div class="card-body">
-            <p>
-              This standalone teaching tool focuses on the iterative radix-2 Cooley-Tukey FFT as
-              a circuit. It shows how inputs are first loaded into bit-reversed order, then
-              processed by butterfly layers that apply twiddle factors and update frequency values
-              in place.
-            </p>
-            <ul class="mini-list">
-              <li><strong>Bit-reversal first:</strong> see why iterative FFT needs a special input order before any butterfly stage begins.</li>
-              <li><strong>Butterfly flow:</strong> inspect the exact pair of positions, twiddle factor, and updated upper/lower outputs at every step.</li>
-              <li><strong>Same math as recursion:</strong> compare iterative and recursive FFT outputs and confirm they match numerically.</li>
-            </ul>
-          </div>
-        </article>
-      </section>
+      <section id="learn-fft" class="section-shell learn-section" aria-label="Learn FFT">
+        <div class="section-heading section-heading-spacious">
+          <span class="panel-kicker">Learn FFT</span>
+          <h2 class="section-title">Understand the idea before you touch the controls</h2>
+          <p class="section-copy">
+            This top section is a guided lesson. It explains what FFT is, why it matters, how the
+            iterative circuit works, and what to notice when you move down to the interactive lab.
+          </p>
+        </div>
 
-      <section id="concept" class="intro-grid" aria-label="FFT concept cards">
-        <article class="feature-card">
-          <span class="feature-kicker">Concept</span>
-          <h3 class="panel-heading">How the layered circuit works</h3>
-          <div class="card-body">
-            <p>
-              At stage <code>s</code>, the circuit works on blocks of size <code>2^s</code>. Each
-              butterfly combines one upper wire and one lower wire using a twiddle factor
-              <code>w = e^(-2pi i j / m)</code>, then writes updated outputs back to the same pair of
-              positions.
-            </p>
-            <ol class="mini-list">
-              <li><strong>Load:</strong> place the input into bit-reversed order.</li>
-              <li><strong>Mix:</strong> compute <code>t = w * lower</code> for each butterfly.</li>
-              <li><strong>Update:</strong> write <code>upper = u + t</code> and <code>lower = u - t</code>.</li>
-            </ol>
-          </div>
-        </article>
-
-        <article class="feature-card">
-          <span class="feature-kicker">Worked Example</span>
-          <h3 class="panel-heading">Anchored to the simple real-valued preset</h3>
-          <div class="card-body">
-            <p>
-              Use the <strong>Simple Real Example</strong> preset to study a small signal with a mix
-              of positive, zero, and negative samples. For <code>n = 8</code>, the circuit has
-              <strong>3 stages</strong> and <strong>12 butterflies</strong>, so every update is still
-              visible enough to learn from.
-            </p>
-            <div class="phase-list">
-              <div><strong>Sample input:</strong> [3, 1, 0, -1, 2, 0, 1, -2]</div>
-              <div><strong>Bit-reversed source order:</strong> [0, 4, 2, 6, 1, 5, 3, 7]</div>
-              <div><strong>Circuit depth:</strong> 3 butterfly layers, each parallel across the full width.</div>
-              <div><strong>Learning goal:</strong> watch how local pair updates build the global frequency bins.</div>
+        <div class="lesson-grid lesson-grid-two">
+          <article id="overview" class="feature-card lesson-card overview-card">
+            <span class="feature-kicker">What Is FFT?</span>
+            <h3 class="panel-heading">A faster way to compute the Discrete Fourier Transform</h3>
+            <div class="card-body">
+              <p>
+                The Discrete Fourier Transform, or DFT, turns a list of samples into a list of
+                frequency components. In simple terms, it tells us which repeating patterns are
+                hidden inside the signal.
+              </p>
+              <p>
+                FFT is not a different answer. It is a much faster way to compute the same DFT by
+                reusing structure instead of recomputing similar work over and over again.
+              </p>
             </div>
-          </div>
-        </article>
+          </article>
 
-        <article class="feature-card">
-          <span class="feature-kicker">Complexity</span>
-          <h3 class="panel-heading">Why FFT is efficient</h3>
-          <div class="card-body">
-            <p>
-              A direct Discrete Fourier Transform compares each output frequency against every input
-              sample, which costs <code>O(n^2)</code>. FFT reuses symmetry and factorization, so the
-              same transform is built from <code>log2(n)</code> layers of <code>n / 2</code>
-              butterflies each.
+          <article class="feature-card lesson-card">
+            <span class="feature-kicker">Why FFT Is Important</span>
+            <h3 class="panel-heading">It shows up anywhere fast frequency analysis or convolution matters</h3>
+            <div class="card-body">
+              <ul class="mini-list">
+                <li><strong>Signal processing:</strong> analyze sound, images, and communication signals.</li>
+                <li><strong>Polynomial multiplication:</strong> turn convolution into fast pointwise multiplication.</li>
+                <li><strong>Efficient computation:</strong> solve useful problems much faster than the naive DFT.</li>
+              </ul>
+              <p>
+                That is why FFT is such a common idea in algorithms, engineering, and high-performance computing.
+              </p>
+            </div>
+          </article>
+        </div>
+
+        <div id="concept" class="lesson-grid lesson-grid-three" aria-label="FFT concept cards">
+          <article class="feature-card lesson-card">
+            <span class="feature-kicker">How The Iterative FFT Works</span>
+            <h3 class="panel-heading">Four ideas drive the whole algorithm</h3>
+            <div class="card-body">
+              <ul class="mini-list">
+                <li><strong>Bit-reversal:</strong> reorder the input so the iterative schedule matches the recursive split.</li>
+                <li><strong>Butterflies:</strong> combine an upper value and a lower value in one local update.</li>
+                <li><strong>Twiddle factors:</strong> rotate one branch by the right complex root of unity.</li>
+                <li><strong>Stages:</strong> repeat the same pattern on bigger and bigger blocks.</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="feature-card lesson-card">
+            <span class="feature-kicker">Why The Circuit View Matters</span>
+            <h3 class="panel-heading">The layered drawing makes the parallel structure obvious</h3>
+            <div class="card-body">
+              <p>
+                In one stage, many butterflies can run at the same time because they touch different
+                wires. That is why the circuit picture is so useful: it shows FFT as a structured
+                network, not just a loop nest.
+              </p>
+              <ul class="mini-list">
+                <li><strong>Parallel butterflies:</strong> same-stage work can happen simultaneously.</li>
+                <li><strong>O(log n) depth:</strong> only the stage count must happen one after another.</li>
+                <li><strong>Hardware-friendly:</strong> the pattern is regular and easy to map to a pipeline or circuit.</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="feature-card lesson-card">
+            <span class="feature-kicker">Complexity</span>
+            <h3 class="panel-heading">Why FFT beats the naive DFT</h3>
+            <div class="card-body">
+              <p>
+                A naive DFT compares every output frequency with every input sample, so the amount of
+                work grows like <code>O(n^2)</code>. FFT avoids that full all-to-all comparison by
+                breaking the transform into reusable butterfly stages.
+              </p>
+              <ul class="mini-list">
+                <li><strong>Naive DFT:</strong> too many repeated calculations.</li>
+                <li><strong>FFT:</strong> <code>log2(n)</code> stages with <code>n / 2</code> butterflies each.</li>
+                <li><strong>Result:</strong> much better scaling as the input gets larger.</li>
+              </ul>
+            </div>
+          </article>
+        </div>
+
+        <div class="lesson-grid lesson-grid-two">
+          <article class="feature-card lesson-card">
+            <span class="feature-kicker">Worked Example</span>
+            <h3 class="panel-heading">A simple n = 8 journey through the circuit</h3>
+            <div class="card-body">
+              <p>
+                Start with the <strong>Simple Real Example</strong> preset and focus on the big
+                picture. The input is reordered into bit-reversed order, then the circuit applies
+                three butterfly stages.
+              </p>
+              <div class="phase-list">
+                <div><strong>Input:</strong> [3, 1, 0, -1, 2, 0, 1, -2]</div>
+                <div><strong>Bit-reversed load order:</strong> [0, 4, 2, 6, 1, 5, 3, 7]</div>
+                <div><strong>Stage pattern:</strong> small local pair updates grow into full-frequency outputs.</div>
+                <div><strong>What to notice:</strong> each stage looks similar, but acts on wider groups of wires.</div>
+              </div>
+            </div>
+          </article>
+
+          <section id="key-concepts" class="feature-card lesson-card key-concepts-card" aria-label="Key concepts">
+            <span class="feature-kicker">Key Concepts</span>
+            <h3 class="panel-heading">The ideas to leave with</h3>
+            <div class="lesson-concepts-grid">
+              <article class="concept-pill-card">
+                <h4>Butterfly</h4>
+                <p>A local operation that mixes two values and creates the next pair of outputs.</p>
+              </article>
+              <article class="concept-pill-card">
+                <h4>Bit Reversal</h4>
+                <p>A binary-index reorder that prepares the iterative in-place stage schedule.</p>
+              </article>
+              <article class="concept-pill-card">
+                <h4>Twiddle Factor</h4>
+                <p>A complex root of unity that rotates one branch by exactly the phase the stage needs.</p>
+              </article>
+              <article class="concept-pill-card">
+                <h4>Iterative vs Recursive</h4>
+                <p>The same FFT math, reorganized from a recursion tree into fixed circuit layers.</p>
+              </article>
+            </div>
+          </section>
+        </div>
+
+        <section id="polynomial-multiplication" class="poly-section" aria-label="Polynomial multiplication with FFT">
+          <div class="section-heading">
+            <span class="panel-kicker">Polynomial Multiplication</span>
+            <h2 class="section-title">A concrete problem where FFT saves real work</h2>
+            <p class="section-copy">
+              Polynomial multiplication is one of the best beginner examples of why FFT matters.
+              Ordinary multiplication of coefficients is really convolution, and FFT turns that
+              convolution into fast pointwise multiplication after evaluation.
             </p>
-            <ul class="mini-list">
-              <li><strong>Work:</strong> <code>n / 2</code> butterflies per stage times <code>log2(n)</code> stages gives <code>O(n log n)</code>.</li>
-              <li><strong>Depth:</strong> the circuit has only <code>log2(n)</code> sequential layers.</li>
-              <li><strong>Parallel view:</strong> butterflies inside a single stage can run at the same time.</li>
-            </ul>
           </div>
-        </article>
+
+          <div class="poly-grid">
+            <section class="panel poly-card" aria-labelledby="poly-controls-title">
+              <div class="panel-header-row">
+                <div>
+                  <span class="panel-kicker">Inputs</span>
+                  <h3 id="poly-controls-title" class="panel-title">Coefficient Form</h3>
+                </div>
+                <p class="card-copy">Enter real coefficients from constant term upward, such as <code>1, 2, 3</code> for <code>1 + 2x + 3x^2</code>.</p>
+              </div>
+
+              <div class="poly-input-grid">
+                <div class="control-section poly-input-card">
+                  <label class="control-label" for="poly-input-a">Polynomial A Coefficients</label>
+                  <textarea id="poly-input-a" class="input-field input-area" rows="3" placeholder="e.g. 1, 2, 3"></textarea>
+                </div>
+
+                <div class="control-section poly-input-card">
+                  <label class="control-label" for="poly-input-b">Polynomial B Coefficients</label>
+                  <textarea id="poly-input-b" class="input-field input-area" rows="3" placeholder="e.g. 2, 1"></textarea>
+                </div>
+              </div>
+
+              <div class="control-section">
+                <div class="section-head section-head-stack">
+                  <span class="section-kicker">Preset Examples</span>
+                </div>
+                <div class="button-row preset-grid" role="group" aria-label="Polynomial multiplication presets">
+                  <button type="button" class="preset-button" data-poly-preset="intro-example">Intro Example</button>
+                  <button type="button" class="preset-button" data-poly-preset="larger-example">Larger Example</button>
+                  <button type="button" class="preset-button" data-poly-preset="scaling-example">Scaling Example</button>
+                </div>
+                <p id="poly-preset-note" class="help-text">Choose a preset to fill both coefficient lists and compare naive vs FFT automatically.</p>
+              </div>
+
+              <div class="poly-action-row">
+                <button id="poly-compare-btn" type="button" class="transport-text-button transport-primary">Compare Naive vs FFT</button>
+                <button id="poly-load-fft-btn" type="button" class="transport-text-button">Load Padded Coefficients Into FFT Visualizer</button>
+              </div>
+
+              <div class="status-list poly-status-list" aria-label="Polynomial multiplication status">
+                <div class="status-item">
+                  <span class="status-label">Status</span>
+                  <span id="poly-status-badge" class="status-value" data-state="idle">Waiting</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">Padded FFT Size</span>
+                  <span id="poly-size-badge" class="status-value">--</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">Comparison</span>
+                  <span id="poly-match-badge" class="comparison-badge comparison-badge-idle">Run Comparison</span>
+                </div>
+              </div>
+
+              <p id="poly-status-copy" class="help-text">
+                Compare the same polynomial product with a nested-loop convolution and an FFT-based method.
+              </p>
+              <p id="poly-load-note" class="help-text">
+                The FFT visualizer displays one signal at a time, so this button loads the padded coefficients of Polynomial A into the main circuit workspace.
+              </p>
+            </section>
+
+            <section class="panel poly-card" aria-labelledby="poly-pipeline-title">
+              <div class="panel-header-row">
+                <div>
+                  <span class="panel-kicker">Pipeline</span>
+                  <h3 id="poly-pipeline-title" class="panel-title">How FFT Multiplies Polynomials</h3>
+                </div>
+                <p class="card-copy">The FFT view of multiplication treats coefficient convolution as pointwise multiplication after evaluation.</p>
+              </div>
+
+              <ol id="poly-pipeline-list" class="poly-pipeline-list">
+                <li>Start with two coefficient lists in ordinary polynomial form.</li>
+                <li>Pad both lists with zeros to a power-of-two length that can hold the full product.</li>
+                <li>Evaluate both padded polynomials at roots of unity using FFT.</li>
+                <li>Multiply the evaluated values pointwise.</li>
+                <li>Use the inverse FFT to return to coefficient form.</li>
+              </ol>
+
+              <div class="poly-result-banner">
+                <span class="section-kicker">Final Result Coefficients</span>
+                <code id="poly-final-result">Compare an example to see the product coefficients.</code>
+              </div>
+
+              <div class="poly-expression-grid">
+                <div class="formula-card">
+                  <span class="formula-label">Polynomial A</span>
+                  <code id="poly-expression-a">--</code>
+                </div>
+                <div class="formula-card">
+                  <span class="formula-label">Polynomial B</span>
+                  <code id="poly-expression-b">--</code>
+                </div>
+                <div class="formula-card">
+                  <span class="formula-label">Product</span>
+                  <code id="poly-expression-result">--</code>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="poly-results-grid">
+            <article class="feature-card poly-method-card">
+              <span class="feature-kicker">Naive Method</span>
+              <h3 class="panel-heading">Nested-loop coefficient convolution</h3>
+              <div class="card-body">
+                <p>
+                  Multiply every coefficient of <strong>A</strong> by every coefficient of <strong>B</strong>,
+                  then accumulate terms with the same power of <code>x</code>. This directly computes convolution and costs <code>O(n^2)</code>.
+                </p>
+                <div class="phase-list">
+                  <div><strong>Result:</strong> <span id="poly-naive-result">--</span></div>
+                  <div><strong>Current work:</strong> <span id="poly-naive-cost">--</span></div>
+                  <div><strong>Scaling idea:</strong> doubling the coefficient count roughly quadruples the pair checks.</div>
+                </div>
+              </div>
+            </article>
+
+            <article class="feature-card poly-method-card">
+              <span class="feature-kicker">FFT-Based Method</span>
+              <h3 class="panel-heading">Evaluate, multiply, interpolate</h3>
+              <div class="card-body">
+                <p>
+                  FFT converts coefficient convolution into pointwise multiplication. After padding, we evaluate
+                  both polynomials with FFT, multiply their values pairwise, then apply the inverse FFT to recover the coefficients.
+                </p>
+                <div class="phase-list">
+                  <div><strong>Result:</strong> <span id="poly-fft-result">--</span></div>
+                  <div><strong>Current work estimate:</strong> <span id="poly-fft-cost">--</span></div>
+                  <div><strong>Scaling idea:</strong> three FFT-style passes plus one linear pointwise multiply give <code>O(n log n)</code> behavior.</div>
+                </div>
+              </div>
+            </article>
+
+            <article class="feature-card poly-method-card">
+              <span class="feature-kicker">Worked Example</span>
+              <h3 class="panel-heading">Why both methods agree</h3>
+              <div class="card-body">
+                <p>
+                  For <strong>A(x) = 1 + 2x + 3x<sup>2</sup></strong> and <strong>B(x) = 2 + x</strong>,
+                  the coefficient convolution is:
+                </p>
+                <div class="phase-list">
+                  <div><strong>Constant term:</strong> 1*2 = 2</div>
+                  <div><strong>x term:</strong> 1*1 + 2*2 = 5</div>
+                  <div><strong>x<sup>2</sup> term:</strong> 2*1 + 3*2 = 8</div>
+                  <div><strong>x<sup>3</sup> term:</strong> 3*1 = 3</div>
+                </div>
+                <p id="poly-worked-example-copy">
+                  So the final product is <strong>2 + 5x + 8x<sup>2</sup> + 3x<sup>3</sup></strong>. FFT reaches the same answer more efficiently by moving into the frequency domain first.
+                </p>
+              </div>
+            </article>
+          </div>
+        </section>
       </section>
 
-      <div class="layout">
+      <section id="fft-lab" class="section-shell lab-section" aria-label="FFT visualizer lab">
+        <div class="section-heading section-heading-spacious">
+          <span class="panel-kicker">FFT Visualizer</span>
+          <h2 class="section-title">See the FFT in action</h2>
+          <p class="section-copy">
+            Choose an input, build the trace, and step through the circuit. The workspace below is
+            the interactive lab where you can watch bit-reversal, butterfly updates, twiddle
+            factors, and output values evolve in sync.
+          </p>
+        </div>
+
+        <div class="layout">
         <aside class="control-column" aria-label="Control and explanation panels">
           <section class="panel control-panel">
             <div class="panel-section">
@@ -273,70 +511,6 @@
             </dl>
           </section>
 
-          <section class="panel info-panel" aria-labelledby="pseudocode-title">
-            <div class="panel-header-row">
-              <div>
-                <span class="panel-kicker">Pseudocode</span>
-                <h3 id="pseudocode-title" class="panel-title">Iterative FFT Walkthrough</h3>
-              </div>
-              <p class="card-copy">The current step highlights one specific line in the algorithm.</p>
-            </div>
-
-            <div id="pseudocode-body" class="pseudocode-body" aria-live="polite"></div>
-          </section>
-
-          <section class="panel info-panel" aria-labelledby="step-explanation-title">
-            <div class="panel-header-row">
-              <div>
-                <span class="panel-kicker">Step Explanation</span>
-                <h3 id="step-explanation-title" class="panel-title">Student-Friendly Narration</h3>
-              </div>
-              <p class="card-copy">Every step explains the exact indices, twiddle factor, and updated values.</p>
-            </div>
-
-            <div class="explanation-stack">
-              <p id="step-explanation" class="explanation-copy">Build steps to begin the guided explanation.</p>
-              <div class="formula-card">
-                <span class="formula-label">Current formula</span>
-                <code id="step-formula">No butterfly selected yet.</code>
-              </div>
-            </div>
-          </section>
-
-          <section class="panel info-panel" aria-labelledby="comparison-title">
-            <div class="panel-header-row">
-              <div>
-                <span class="panel-kicker">Recursive Comparison</span>
-                <h3 id="comparison-title" class="panel-title">Iterative vs Recursive FFT</h3>
-              </div>
-              <p class="card-copy">The circuit form and the recursive form should compute the same output bins.</p>
-            </div>
-
-            <div class="comparison-summary">
-              <span id="comparison-status" class="comparison-badge comparison-badge-idle">Waiting for valid input</span>
-              <p id="comparison-summary" class="comparison-copy">
-                Load a valid signal to compare iterative and recursive FFT outputs.
-              </p>
-            </div>
-
-            <div class="comparison-table-wrap">
-              <table class="comparison-table">
-                <thead>
-                  <tr>
-                    <th scope="col">k</th>
-                    <th scope="col">Iterative</th>
-                    <th scope="col">Recursive</th>
-                    <th scope="col">|diff|</th>
-                  </tr>
-                </thead>
-                <tbody id="comparison-body">
-                  <tr>
-                    <td colspan="4" class="cell-muted">No comparison yet.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
         </aside>
 
         <main class="workspace-main">
@@ -374,33 +548,6 @@
               </div>
             </div>
 
-            <section class="bit-reversal-panel" aria-labelledby="bit-reversal-title">
-              <div class="bit-reversal-header">
-                <div>
-                  <span class="panel-kicker">Bit-Reversal</span>
-                  <h3 id="bit-reversal-title" class="panel-title">Why iterative FFT reorders the input first</h3>
-                </div>
-                <p class="bit-reversal-copy">
-                  Reversing binary indices places even/odd recursion layers into the correct in-place circuit order.
-                </p>
-              </div>
-
-              <div class="bit-reversal-grid">
-                <div class="bit-reversal-row">
-                  <span class="bit-row-label">Original index order</span>
-                  <div id="bit-original-row" class="bit-chip-row" aria-live="polite"></div>
-                </div>
-                <div class="bit-reversal-row">
-                  <span class="bit-row-label">Bit-reversed load order</span>
-                  <div id="bit-reversed-row" class="bit-chip-row" aria-live="polite"></div>
-                </div>
-              </div>
-
-              <p id="bit-reversal-note" class="bit-reversal-note">
-                Build the trace to step through each reversed-binary mapping.
-              </p>
-            </section>
-
             <div class="network-visual">
               <svg id="fft-svg" class="network-svg" viewBox="0 0 1280 680" role="img" aria-labelledby="fft-svg-title fft-svg-desc">
                 <title id="fft-svg-title">FFT circuit visualization</title>
@@ -408,8 +555,103 @@
               </svg>
             </div>
           </section>
+        </main>
+        </div>
 
-          <section class="panel history-card" aria-labelledby="history-title">
+        <div class="lab-support-grid" aria-label="FFT lab support panels">
+          <section class="panel info-panel lab-support-card" aria-labelledby="pseudocode-title">
+            <div class="panel-header-row">
+              <div>
+                <span class="panel-kicker">Pseudocode</span>
+                <h3 id="pseudocode-title" class="panel-title">Iterative FFT Walkthrough</h3>
+              </div>
+              <p class="card-copy">The current step highlights one specific line in the algorithm.</p>
+            </div>
+
+            <div id="pseudocode-body" class="pseudocode-body" aria-live="polite"></div>
+          </section>
+
+          <section class="panel info-panel lab-support-card" aria-labelledby="step-explanation-title">
+            <div class="panel-header-row">
+              <div>
+                <span class="panel-kicker">Step Explanation</span>
+                <h3 id="step-explanation-title" class="panel-title">Student-Friendly Narration</h3>
+              </div>
+              <p class="card-copy">Every step explains the exact indices, twiddle factor, and updated values.</p>
+            </div>
+
+            <div class="explanation-stack">
+              <p id="step-explanation" class="explanation-copy">Build steps to begin the guided explanation.</p>
+              <div class="formula-card">
+                <span class="formula-label">Current formula</span>
+                <code id="step-formula">No butterfly selected yet.</code>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel info-panel lab-support-card" aria-labelledby="comparison-title">
+            <div class="panel-header-row">
+              <div>
+                <span class="panel-kicker">Recursive Comparison</span>
+                <h3 id="comparison-title" class="panel-title">Iterative vs Recursive FFT</h3>
+              </div>
+              <p class="card-copy">The circuit form and the recursive form should compute the same output bins.</p>
+            </div>
+
+            <div class="comparison-summary">
+              <span id="comparison-status" class="comparison-badge comparison-badge-idle">Waiting for valid input</span>
+              <p id="comparison-summary" class="comparison-copy">
+                Load a valid signal to compare iterative and recursive FFT outputs.
+              </p>
+            </div>
+
+            <div class="comparison-table-wrap">
+              <table class="comparison-table">
+                <thead>
+                  <tr>
+                    <th scope="col">k</th>
+                    <th scope="col">Iterative</th>
+                    <th scope="col">Recursive</th>
+                    <th scope="col">|diff|</th>
+                  </tr>
+                </thead>
+                <tbody id="comparison-body">
+                  <tr>
+                    <td colspan="4" class="cell-muted">No comparison yet.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel bit-reversal-panel lab-support-card" aria-labelledby="bit-reversal-title">
+            <div class="bit-reversal-header">
+              <div>
+                <span class="panel-kicker">Bit-Reversal Trace</span>
+                <h3 id="bit-reversal-title" class="panel-title">Why iterative FFT reorders the input first</h3>
+              </div>
+              <p class="bit-reversal-copy">
+                Reversing binary indices places even/odd recursion layers into the correct in-place circuit order.
+              </p>
+            </div>
+
+            <div class="bit-reversal-grid">
+              <div class="bit-reversal-row">
+                <span class="bit-row-label">Original index order</span>
+                <div id="bit-original-row" class="bit-chip-row" aria-live="polite"></div>
+              </div>
+              <div class="bit-reversal-row">
+                <span class="bit-row-label">Bit-reversed load order</span>
+                <div id="bit-reversed-row" class="bit-chip-row" aria-live="polite"></div>
+              </div>
+            </div>
+
+            <p id="bit-reversal-note" class="bit-reversal-note">
+              Build the trace to step through each reversed-binary mapping.
+            </p>
+          </section>
+
+          <section class="panel history-card lab-support-card lab-support-wide" aria-labelledby="history-title">
             <div class="panel-header-row history-header">
               <div>
                 <span class="panel-kicker">Trace</span>
@@ -441,38 +683,6 @@
               </table>
             </div>
           </section>
-        </main>
-      </div>
-
-      <section id="key-concepts" class="key-concepts-section" aria-label="Key concepts">
-        <div class="section-heading">
-          <span class="panel-kicker">Key Concepts</span>
-          <h2 class="section-title">The ideas students should leave with</h2>
-          <p class="section-copy">
-            The visualization is designed to connect the algebra, the circuit layout, and the runtime advantage.
-          </p>
-        </div>
-
-        <div class="concept-card-grid">
-          <article class="feature-card concept-card">
-            <h3 class="panel-heading">Butterfly</h3>
-            <p>A butterfly mixes two values at a time, creating the upper and lower outputs that feed the next stage.</p>
-          </article>
-
-          <article class="feature-card concept-card">
-            <h3 class="panel-heading">Bit Reversal</h3>
-            <p>Reversing binary indices aligns the iterative in-place schedule with the recursive even/odd decomposition.</p>
-          </article>
-
-          <article class="feature-card concept-card">
-            <h3 class="panel-heading">Twiddle Factors</h3>
-            <p>The complex roots of unity rotate lower-branch values so each stage contributes the correct phase information.</p>
-          </article>
-
-          <article class="feature-card concept-card">
-            <h3 class="panel-heading">Iterative vs Recursive</h3>
-            <p>The layered circuit is just the recursive FFT reorganized into fixed stages that are easier to implement in hardware.</p>
-          </article>
         </div>
       </section>
     </div>

@@ -48,6 +48,29 @@ const PRESET_DESCRIPTIONS = {
   random: "Random Example uses small integers to stress-test the circuit while keeping the values interpretable."
 };
 
+const POLYNOMIAL_PRESETS = {
+  "intro-example": {
+    label: "Intro Example",
+    a: [1, 2, 3],
+    b: [2, 1],
+    note: "This is the classic small worked example: A(x) = 1 + 2x + 3x^2 and B(x) = 2 + x."
+  },
+  "larger-example": {
+    label: "Larger Example",
+    a: [3, 0, 2, 5, 1],
+    b: [1, 4, 0, 2],
+    note: "This slightly larger example needs more accumulation terms, so the benefit of structured FFT evaluation becomes more visible."
+  },
+  "scaling-example": {
+    label: "Scaling Example",
+    a: [1, 2, 3, 4, 5, 6, 7, 8],
+    b: [8, 7, 6, 5, 4, 3, 2, 1],
+    note: "This example grows to a 16-point FFT, which makes the O(n log n) vs O(n^2) discussion much easier to see."
+  }
+};
+
+const POLYNOMIAL_DEFAULT_NOTE = "Choose a preset to fill both coefficient lists and compare naive vs FFT automatically.";
+
 const PSEUDOCODE_BLOCKS = [
   {
     key: "bit-reversal",
@@ -97,7 +120,16 @@ const appState = {
   playTimer: null,
   comparison: null,
   statusText: "Idle",
-  statusTone: "idle"
+  statusTone: "idle",
+  polynomial: {
+    rawA: "",
+    rawB: "",
+    selectedPreset: "intro-example",
+    result: null,
+    statusText: "Waiting",
+    statusTone: "idle",
+    statusCopy: "Compare the same polynomial product with a nested-loop convolution and an FFT-based method."
+  }
 };
 
 const dom = {};
@@ -211,6 +243,113 @@ function formatValuesPreview(values, limit = 4) {
 
 function serializeValues(values) {
   return values.map((value) => formatComplex(value, 3)).join(", ");
+}
+
+// Format a real-number list for display in coefficient form.
+function formatRealList(values) {
+  return `[${values.map((value) => formatNumber(value, 3)).join(", ")}]`;
+}
+
+// Remove tiny floating-point noise from a real coefficient.
+function cleanRealCoefficient(value) {
+  const withoutNoise = normalizeFloat(value);
+  const nearestInteger = Math.round(withoutNoise);
+  if (Math.abs(withoutNoise - nearestInteger) < 1e-9) {
+    return nearestInteger;
+  }
+  return Number(withoutNoise.toFixed(6));
+}
+
+// Build a readable polynomial expression from coefficient form.
+function formatPolynomialExpression(coefficients) {
+  if (!coefficients.length) {
+    return "0";
+  }
+
+  const terms = [];
+  coefficients.forEach((coefficient, index) => {
+    if (coefficient === 0) {
+      return;
+    }
+
+    const magnitude = Math.abs(coefficient);
+    const coefficientText = magnitude === 1 && index > 0 ? "" : formatNumber(magnitude, 3);
+    let term = "";
+
+    if (index === 0) {
+      term = formatNumber(magnitude, 3);
+    } else if (index === 1) {
+      term = `${coefficientText}x`;
+    } else {
+      term = `${coefficientText}x^${index}`;
+    }
+
+    if (!terms.length) {
+      terms.push(coefficient < 0 ? `-${term}` : term);
+    } else {
+      terms.push(`${coefficient < 0 ? "-" : "+"} ${term}`);
+    }
+  });
+
+  return terms.length ? terms.join(" ") : "0";
+}
+
+// Parse a comma-separated list of real polynomial coefficients.
+function parseRealCoefficientList(rawInput, label) {
+  const tokens = rawInput
+    .split(",")
+    .map((token) => token.trim())
+    .filter((token) => token !== "");
+
+  if (!tokens.length) {
+    return {
+      valid: false,
+      message: `${label} needs at least one real coefficient.`,
+      values: []
+    };
+  }
+
+  const values = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const parsed = Number(tokens[index]);
+    if (!Number.isFinite(parsed)) {
+      return {
+        valid: false,
+        message: `${label} contains "${tokens[index]}", which is not a valid real number.`,
+        values: []
+      };
+    }
+    values.push(cleanRealCoefficient(parsed));
+  }
+
+  return {
+    valid: true,
+    message: "",
+    values
+  };
+}
+
+// Convert a real coefficient list into complex samples with zero imaginary parts.
+function realCoefficientsToComplex(values) {
+  return values.map((value) => complex(value, 0));
+}
+
+// Find the next power of two greater than or equal to the requested length.
+function nextPowerOfTwo(value) {
+  let power = 1;
+  while (power < value) {
+    power *= 2;
+  }
+  return power;
+}
+
+// Pad a real coefficient list with zeros up to the chosen FFT size.
+function padRealCoefficients(values, targetSize) {
+  const padded = values.slice();
+  while (padded.length < targetSize) {
+    padded.push(0);
+  }
+  return padded;
 }
 
 function parseImaginaryCoefficient(text) {
@@ -452,6 +591,89 @@ function compareIterativeAndRecursive(values) {
     maxError,
     tolerance: TOLERANCE,
     matches: maxError <= TOLERANCE
+  };
+}
+
+// Conjugate a complex value so the inverse FFT can reuse the forward FFT helper.
+function conjugateComplex(value) {
+  return complex(value.re, -value.im);
+}
+
+// Scale a complex value by a real factor.
+function scaleComplex(value, scalar) {
+  return complex(value.re * scalar, value.im * scalar);
+}
+
+// Compute the inverse FFT by conjugating, using the forward FFT, and scaling back down.
+function inverseFft(values) {
+  const conjugated = values.map((value) => conjugateComplex(value));
+  const transformed = iterativeFft(conjugated);
+  return transformed.map((value) => scaleComplex(conjugateComplex(value), 1 / values.length));
+}
+
+// Multiply two polynomials directly with the classic nested-loop convolution.
+function naivePolynomialMultiply(coefficientsA, coefficientsB) {
+  const result = new Array(coefficientsA.length + coefficientsB.length - 1).fill(0);
+
+  for (let indexA = 0; indexA < coefficientsA.length; indexA += 1) {
+    for (let indexB = 0; indexB < coefficientsB.length; indexB += 1) {
+      result[indexA + indexB] += coefficientsA[indexA] * coefficientsB[indexB];
+    }
+  }
+
+  return result.map((value) => cleanRealCoefficient(value));
+}
+
+// Multiply two polynomials by padding, evaluating with FFT, multiplying pointwise, and inverting.
+function fftPolynomialMultiply(coefficientsA, coefficientsB) {
+  const resultLength = coefficientsA.length + coefficientsB.length - 1;
+  const paddedSize = Math.max(8, nextPowerOfTwo(resultLength));
+  const paddedA = padRealCoefficients(coefficientsA, paddedSize);
+  const paddedB = padRealCoefficients(coefficientsB, paddedSize);
+  const fftA = iterativeFft(realCoefficientsToComplex(paddedA));
+  const fftB = iterativeFft(realCoefficientsToComplex(paddedB));
+  const pointwiseProduct = fftA.map((value, index) => multiplyComplex(value, fftB[index]));
+  const inverseValues = inverseFft(pointwiseProduct);
+  const result = inverseValues
+    .slice(0, resultLength)
+    .map((value) => cleanRealCoefficient(value.re));
+
+  return {
+    paddedSize,
+    paddedA,
+    paddedB,
+    fftA,
+    fftB,
+    pointwiseProduct,
+    result
+  };
+}
+
+// Compare the naive and FFT-based polynomial products and collect teaching metadata.
+function comparePolynomialMultiplication(coefficientsA, coefficientsB) {
+  const naiveResult = naivePolynomialMultiply(coefficientsA, coefficientsB);
+  const fftResultData = fftPolynomialMultiply(coefficientsA, coefficientsB);
+  const matches =
+    naiveResult.length === fftResultData.result.length &&
+    naiveResult.every((value, index) => Math.abs(value - fftResultData.result[index]) < 1e-9);
+
+  return {
+    coefficientsA,
+    coefficientsB,
+    naiveResult,
+    fftResult: fftResultData.result,
+    paddedA: fftResultData.paddedA,
+    paddedB: fftResultData.paddedB,
+    paddedSize: fftResultData.paddedSize,
+    fftA: fftResultData.fftA,
+    fftB: fftResultData.fftB,
+    pointwiseProduct: fftResultData.pointwiseProduct,
+    matches,
+    naiveCost: coefficientsA.length * coefficientsB.length,
+    fftWorkEstimate:
+      3 * fftResultData.paddedSize * Math.log2(fftResultData.paddedSize) + fftResultData.paddedSize,
+    visualizerCompatible:
+      fftResultData.paddedSize === 8 || fftResultData.paddedSize === 16
   };
 }
 
@@ -836,7 +1058,8 @@ function cacheDom() {
   dom.comparisonSummary = document.getElementById("comparison-summary");
   dom.comparisonBody = document.getElementById("comparison-body");
   dom.sizeButtons = Array.from(document.querySelectorAll("[data-size]"));
-  dom.presetButtons = Array.from(document.querySelectorAll(".preset-button"));
+  dom.presetButtons = Array.from(document.querySelectorAll(".preset-button[data-preset]"));
+  dom.polyPresetButtons = Array.from(document.querySelectorAll("[data-poly-preset]"));
   dom.counterTotalButterflies = document.getElementById("counter-total-butterflies");
   dom.counterProcessedButterflies = document.getElementById("counter-processed-butterflies");
   dom.counterTotalStages = document.getElementById("counter-total-stages");
@@ -846,6 +1069,25 @@ function cacheDom() {
   dom.counterSize = document.getElementById("counter-size");
   dom.counterDepth = document.getElementById("counter-depth");
   dom.counterEstimate = document.getElementById("counter-estimate");
+  dom.polyInputA = document.getElementById("poly-input-a");
+  dom.polyInputB = document.getElementById("poly-input-b");
+  dom.polyPresetNote = document.getElementById("poly-preset-note");
+  dom.polyCompareButton = document.getElementById("poly-compare-btn");
+  dom.polyLoadButton = document.getElementById("poly-load-fft-btn");
+  dom.polyStatusBadge = document.getElementById("poly-status-badge");
+  dom.polySizeBadge = document.getElementById("poly-size-badge");
+  dom.polyMatchBadge = document.getElementById("poly-match-badge");
+  dom.polyStatusCopy = document.getElementById("poly-status-copy");
+  dom.polyLoadNote = document.getElementById("poly-load-note");
+  dom.polyPipelineList = document.getElementById("poly-pipeline-list");
+  dom.polyFinalResult = document.getElementById("poly-final-result");
+  dom.polyExpressionA = document.getElementById("poly-expression-a");
+  dom.polyExpressionB = document.getElementById("poly-expression-b");
+  dom.polyExpressionResult = document.getElementById("poly-expression-result");
+  dom.polyNaiveResult = document.getElementById("poly-naive-result");
+  dom.polyNaiveCost = document.getElementById("poly-naive-cost");
+  dom.polyFftResult = document.getElementById("poly-fft-result");
+  dom.polyFftCost = document.getElementById("poly-fft-cost");
 }
 
 function setStatus(text, tone) {
@@ -1669,6 +1911,76 @@ function renderHistory() {
   });
 }
 
+// Refresh the polynomial preset button state so the selected example is obvious.
+function updatePolynomialPresetSelection() {
+  dom.polyPresetButtons.forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.polyPreset === appState.polynomial.selectedPreset);
+  });
+}
+
+// Show the polynomial multiplication pipeline, results, and current comparison state.
+function renderPolynomialSection() {
+  const polynomialState = appState.polynomial;
+  const result = polynomialState.result;
+
+  dom.polyStatusBadge.textContent = polynomialState.statusText;
+  dom.polyStatusBadge.dataset.state = polynomialState.statusTone;
+  dom.polyStatusCopy.textContent = polynomialState.statusCopy;
+  dom.polyPresetNote.textContent = polynomialState.selectedPreset
+    ? POLYNOMIAL_PRESETS[polynomialState.selectedPreset].note
+    : POLYNOMIAL_DEFAULT_NOTE;
+  dom.polySizeBadge.textContent = result ? String(result.paddedSize) : "--";
+  updatePolynomialPresetSelection();
+
+  if (!result) {
+    dom.polyMatchBadge.textContent = "Run Comparison";
+    dom.polyMatchBadge.className = "comparison-badge comparison-badge-idle";
+    dom.polyPipelineList.innerHTML = `
+      <li>Start with two coefficient lists in ordinary polynomial form.</li>
+      <li>Pad both lists with zeros to a power-of-two length that can hold the full product.</li>
+      <li>Evaluate both padded polynomials at roots of unity using FFT.</li>
+      <li>Multiply the evaluated values pointwise.</li>
+      <li>Use the inverse FFT to return to coefficient form.</li>
+    `;
+    dom.polyFinalResult.textContent = "Compare an example to see the product coefficients.";
+    dom.polyExpressionA.textContent = "--";
+    dom.polyExpressionB.textContent = "--";
+    dom.polyExpressionResult.textContent = "--";
+    dom.polyNaiveResult.textContent = "--";
+    dom.polyNaiveCost.textContent = "--";
+    dom.polyFftResult.textContent = "--";
+    dom.polyFftCost.textContent = "--";
+    dom.polyLoadButton.disabled = true;
+    dom.polyLoadNote.textContent =
+      "The FFT visualizer displays one signal at a time, so this button loads the padded coefficients of Polynomial A into the main circuit workspace.";
+    return;
+  }
+
+  dom.polyMatchBadge.textContent = result.matches ? "Same Answer" : "Mismatch";
+  dom.polyMatchBadge.className = `comparison-badge ${result.matches ? "comparison-badge-pass" : "comparison-badge-fail"}`;
+
+  dom.polyPipelineList.innerHTML = `
+    <li>Start with coefficient form: A = ${formatRealList(result.coefficientsA)} and B = ${formatRealList(result.coefficientsB)}.</li>
+    <li>Pad both lists with zeros to length ${result.paddedSize}: A = ${formatRealList(result.paddedA)} and B = ${formatRealList(result.paddedB)}.</li>
+    <li>Evaluate with FFT at ${result.paddedSize} roots of unity. Sample values: FFT(A) ${formatValuesPreview(result.fftA, 6)} and FFT(B) ${formatValuesPreview(result.fftB, 6)}.</li>
+    <li>Multiply the evaluated values pointwise: FFT(A) * FFT(B) ${formatValuesPreview(result.pointwiseProduct, 6)}.</li>
+    <li>Apply the inverse FFT and trim back to the needed coefficient length: ${formatRealList(result.fftResult)}.</li>
+  `;
+
+  dom.polyFinalResult.textContent = formatRealList(result.fftResult);
+  dom.polyExpressionA.textContent = formatPolynomialExpression(result.coefficientsA);
+  dom.polyExpressionB.textContent = formatPolynomialExpression(result.coefficientsB);
+  dom.polyExpressionResult.textContent = formatPolynomialExpression(result.fftResult);
+  dom.polyNaiveResult.textContent = formatRealList(result.naiveResult);
+  dom.polyNaiveCost.textContent = `${result.naiveCost} coefficient products (${result.coefficientsA.length} x ${result.coefficientsB.length})`;
+  dom.polyFftResult.textContent = formatRealList(result.fftResult);
+  dom.polyFftCost.textContent = `About ${Math.round(result.fftWorkEstimate)} structured operations using ${result.paddedSize}-point FFT passes`;
+  dom.polyLoadButton.disabled = !result.visualizerCompatible;
+  dom.polyLoadNote.textContent = result.visualizerCompatible
+    ? "Polynomial A can be loaded directly into the main FFT visualizer because the padded length matches a supported circuit size."
+    : "This product uses a padded size outside the current 8/16 teaching circuits, so the load-to-visualizer button is disabled.";
+}
+
 function renderAll() {
   renderValidationMessage();
   updatePresetSelection();
@@ -1683,6 +1995,7 @@ function renderAll() {
   renderBitReversalPanel();
   renderVisualization();
   renderHistory();
+  renderPolynomialSection();
   updateButtons();
 }
 
@@ -1745,6 +2058,84 @@ function handleSizeChange(size) {
   }
 
   setStatus("Waiting for valid input", "idle");
+  refreshInputState();
+}
+
+// Clear old polynomial results when the user edits the coefficient inputs manually.
+function handlePolynomialInputChange() {
+  appState.polynomial.rawA = dom.polyInputA.value.trim();
+  appState.polynomial.rawB = dom.polyInputB.value.trim();
+  appState.polynomial.selectedPreset = null;
+  appState.polynomial.result = null;
+  appState.polynomial.statusText = "Edited";
+  appState.polynomial.statusTone = "paused";
+  appState.polynomial.statusCopy = "Coefficient lists changed. Click Compare Naive vs FFT to recompute the product.";
+  renderAll();
+}
+
+// Load one of the polynomial multiplication presets into both coefficient inputs.
+function applyPolynomialPreset(presetName) {
+  const preset = POLYNOMIAL_PRESETS[presetName];
+  if (!preset) {
+    return;
+  }
+
+  appState.polynomial.selectedPreset = presetName;
+  appState.polynomial.rawA = preset.a.join(", ");
+  appState.polynomial.rawB = preset.b.join(", ");
+  dom.polyInputA.value = appState.polynomial.rawA;
+  dom.polyInputB.value = appState.polynomial.rawB;
+  comparePolynomialInputs();
+}
+
+// Compare naive and FFT-based polynomial multiplication for the current inputs.
+function comparePolynomialInputs() {
+  appState.polynomial.rawA = dom.polyInputA.value.trim();
+  appState.polynomial.rawB = dom.polyInputB.value.trim();
+
+  const parsedA = parseRealCoefficientList(appState.polynomial.rawA, "Polynomial A");
+  const parsedB = parseRealCoefficientList(appState.polynomial.rawB, "Polynomial B");
+
+  if (!parsedA.valid) {
+    appState.polynomial.result = null;
+    appState.polynomial.statusText = "Invalid Input";
+    appState.polynomial.statusTone = "error";
+    appState.polynomial.statusCopy = parsedA.message;
+    renderAll();
+    return;
+  }
+
+  if (!parsedB.valid) {
+    appState.polynomial.result = null;
+    appState.polynomial.statusText = "Invalid Input";
+    appState.polynomial.statusTone = "error";
+    appState.polynomial.statusCopy = parsedB.message;
+    renderAll();
+    return;
+  }
+
+  appState.polynomial.result = comparePolynomialMultiplication(parsedA.values, parsedB.values);
+  appState.polynomial.statusText = "Compared";
+  appState.polynomial.statusTone = appState.polynomial.result.matches ? "complete" : "error";
+  appState.polynomial.statusCopy = appState.polynomial.result.matches
+    ? "Naive convolution and FFT-based multiplication produced the same coefficient result."
+    : "The two methods disagreed, which means something needs debugging.";
+  renderAll();
+}
+
+// Push the padded coefficients of Polynomial A into the main FFT visualizer input.
+function loadPolynomialIntoVisualizer() {
+  const result = appState.polynomial.result;
+  if (!result || !result.visualizerCompatible) {
+    return;
+  }
+
+  appState.selectedSize = result.paddedSize;
+  appState.selectedPreset = null;
+  updateSizeSelection();
+  appState.rawInput = serializeValues(realCoefficientsToComplex(result.paddedA));
+  dom.customInput.value = appState.rawInput;
+  dom.presetNote.textContent = "Loaded padded Polynomial A into the FFT visualizer so the circuit view matches the polynomial multiplication lesson.";
   refreshInputState();
 }
 
@@ -1838,9 +2229,15 @@ function resetTrace() {
 
 function bindEvents() {
   dom.customInput.addEventListener("input", handleInputChange);
+  dom.polyInputA.addEventListener("input", handlePolynomialInputChange);
+  dom.polyInputB.addEventListener("input", handlePolynomialInputChange);
 
   dom.presetButtons.forEach((button) => {
     button.addEventListener("click", () => applyPreset(button.dataset.preset));
+  });
+
+  dom.polyPresetButtons.forEach((button) => {
+    button.addEventListener("click", () => applyPolynomialPreset(button.dataset.polyPreset));
   });
 
   dom.sizeButtons.forEach((button) => {
@@ -1860,6 +2257,8 @@ function bindEvents() {
   dom.playButton.addEventListener("click", startPlayback);
   dom.pauseButton.addEventListener("click", pausePlayback);
   dom.resetButton.addEventListener("click", resetTrace);
+  dom.polyCompareButton.addEventListener("click", comparePolynomialInputs);
+  dom.polyLoadButton.addEventListener("click", loadPolynomialIntoVisualizer);
 
   dom.historyBody.addEventListener("click", (event) => {
     const row = event.target.closest("tr[data-step-index]");
@@ -1876,7 +2275,10 @@ function initializeApp() {
   bindEvents();
   dom.customInput.value = "";
   dom.speedRange.value = String(appState.playbackSpeed);
+  dom.polyInputA.value = "";
+  dom.polyInputB.value = "";
   setStatus("Idle", "idle");
+  applyPolynomialPreset("intro-example");
   renderAll();
 }
 
@@ -1889,11 +2291,16 @@ if (typeof module !== "undefined" && module.exports) {
     complex,
     parseComplexToken,
     parseComplexList,
+    parseRealCoefficientList,
     reverseBits,
     buildBitReversedCopy,
     iterativeFft,
+    inverseFft,
     recursiveFft,
     compareIterativeAndRecursive,
-    buildFftSteps
+    buildFftSteps,
+    naivePolynomialMultiply,
+    fftPolynomialMultiply,
+    comparePolynomialMultiplication
   };
 }
