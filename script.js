@@ -1090,6 +1090,16 @@ function cacheDom() {
   dom.polyFftCost = document.getElementById("poly-fft-cost");
 }
 
+// Check whether the optional polynomial multiplication lesson card is present in the current page.
+function hasPolynomialUi() {
+  return Boolean(
+    dom.polyInputA &&
+    dom.polyInputB &&
+    dom.polyCompareButton &&
+    dom.polyLoadButton
+  );
+}
+
 function setStatus(text, tone) {
   appState.statusText = text;
   appState.statusTone = tone;
@@ -1920,6 +1930,10 @@ function updatePolynomialPresetSelection() {
 
 // Show the polynomial multiplication pipeline, results, and current comparison state.
 function renderPolynomialSection() {
+  if (!hasPolynomialUi()) {
+    return;
+  }
+
   const polynomialState = appState.polynomial;
   const result = polynomialState.result;
 
@@ -2063,6 +2077,10 @@ function handleSizeChange(size) {
 
 // Clear old polynomial results when the user edits the coefficient inputs manually.
 function handlePolynomialInputChange() {
+  if (!hasPolynomialUi()) {
+    return;
+  }
+
   appState.polynomial.rawA = dom.polyInputA.value.trim();
   appState.polynomial.rawB = dom.polyInputB.value.trim();
   appState.polynomial.selectedPreset = null;
@@ -2075,6 +2093,10 @@ function handlePolynomialInputChange() {
 
 // Load one of the polynomial multiplication presets into both coefficient inputs.
 function applyPolynomialPreset(presetName) {
+  if (!hasPolynomialUi()) {
+    return;
+  }
+
   const preset = POLYNOMIAL_PRESETS[presetName];
   if (!preset) {
     return;
@@ -2090,6 +2112,10 @@ function applyPolynomialPreset(presetName) {
 
 // Compare naive and FFT-based polynomial multiplication for the current inputs.
 function comparePolynomialInputs() {
+  if (!hasPolynomialUi()) {
+    return;
+  }
+
   appState.polynomial.rawA = dom.polyInputA.value.trim();
   appState.polynomial.rawB = dom.polyInputB.value.trim();
 
@@ -2125,6 +2151,10 @@ function comparePolynomialInputs() {
 
 // Push the padded coefficients of Polynomial A into the main FFT visualizer input.
 function loadPolynomialIntoVisualizer() {
+  if (!hasPolynomialUi()) {
+    return;
+  }
+
   const result = appState.polynomial.result;
   if (!result || !result.visualizerCompatible) {
     return;
@@ -2229,8 +2259,12 @@ function resetTrace() {
 
 function bindEvents() {
   dom.customInput.addEventListener("input", handleInputChange);
-  dom.polyInputA.addEventListener("input", handlePolynomialInputChange);
-  dom.polyInputB.addEventListener("input", handlePolynomialInputChange);
+  if (dom.polyInputA) {
+    dom.polyInputA.addEventListener("input", handlePolynomialInputChange);
+  }
+  if (dom.polyInputB) {
+    dom.polyInputB.addEventListener("input", handlePolynomialInputChange);
+  }
 
   dom.presetButtons.forEach((button) => {
     button.addEventListener("click", () => applyPreset(button.dataset.preset));
@@ -2257,8 +2291,12 @@ function bindEvents() {
   dom.playButton.addEventListener("click", startPlayback);
   dom.pauseButton.addEventListener("click", pausePlayback);
   dom.resetButton.addEventListener("click", resetTrace);
-  dom.polyCompareButton.addEventListener("click", comparePolynomialInputs);
-  dom.polyLoadButton.addEventListener("click", loadPolynomialIntoVisualizer);
+  if (dom.polyCompareButton) {
+    dom.polyCompareButton.addEventListener("click", comparePolynomialInputs);
+  }
+  if (dom.polyLoadButton) {
+    dom.polyLoadButton.addEventListener("click", loadPolynomialIntoVisualizer);
+  }
 
   dom.historyBody.addEventListener("click", (event) => {
     const row = event.target.closest("tr[data-step-index]");
@@ -2275,10 +2313,12 @@ function initializeApp() {
   bindEvents();
   dom.customInput.value = "";
   dom.speedRange.value = String(appState.playbackSpeed);
-  dom.polyInputA.value = "";
-  dom.polyInputB.value = "";
   setStatus("Idle", "idle");
-  applyPolynomialPreset("intro-example");
+  if (hasPolynomialUi()) {
+    dom.polyInputA.value = "";
+    dom.polyInputB.value = "";
+    applyPolynomialPreset("intro-example");
+  }
   renderAll();
 }
 
