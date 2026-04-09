@@ -25,7 +25,6 @@
           <div class="hero-chip-row" aria-label="Page navigation">
             <a class="hero-chip hero-chip-link" href="#learn-fft">Learn FFT</a>
             <a class="hero-chip hero-chip-link hero-chip-tool" href="#fft-lab">Polynomial Lab</a>
-            <a class="hero-chip hero-chip-link" href="#worked-example">Worked Example</a>
           </div>
         </div>
 
@@ -196,9 +195,6 @@
             <div class="panel-section">
               <span class="panel-kicker">Workspace</span>
               <h2 id="mode-panel-title" class="panel-title">Polynomial Multiplication Workbench</h2>
-              <p id="mode-panel-copy" class="card-copy">
-                Evaluate two polynomials, multiply their values pointwise, and inspect one pipeline phase at a time in the butterfly circuit.
-              </p>
             </div>
 
             <div class="control-stack">
@@ -235,18 +231,13 @@
                     <button type="button" class="phase-button is-selected" data-poly-phase="fft-a">FFT(A)</button>
                     <button type="button" class="phase-button" data-poly-phase="fft-b">FFT(B)</button>
                     <button type="button" class="phase-button" data-poly-phase="pointwise">Pointwise</button>
-                    <button type="button" class="phase-button" data-poly-phase="inverse">Inverse FFT</button>
+                    <button type="button" class="phase-button" data-poly-phase="inverse">IFFT</button>
                     <button type="button" class="phase-button" data-poly-phase="result">Result</button>
                   </div>
                   <p id="poly-phase-help" class="help-text">
                     Choose a phase to see what the FFT circuit is doing for polynomial multiplication. FFT(A), FFT(B), and inverse FFT are the stages you can animate.
                   </p>
                 </section>
-
-                <div class="poly-action-row">
-                  <button id="poly-compare-btn" type="button" class="transport-text-button transport-primary">Compare Naive vs FFT</button>
-                  <button id="poly-load-fft-btn" type="button" class="transport-text-button">Send Padded A To Frequency View</button>
-                </div>
 
                 <div class="status-list poly-status-list" aria-label="Polynomial multiplication status">
                   <div class="status-item">
@@ -259,15 +250,12 @@
                   </div>
                   <div class="status-item">
                     <span class="status-label">Comparison</span>
-                    <span id="poly-match-badge" class="comparison-badge comparison-badge-idle">Run Comparison</span>
+                    <span id="poly-match-badge" class="comparison-badge comparison-badge-idle">Waiting</span>
                   </div>
                 </div>
 
                 <p id="poly-status-copy" class="help-text">
-                  Compare the same polynomial product with a nested-loop convolution and an FFT-based method.
-                </p>
-                <p id="poly-load-note" class="help-text">
-                  The frequency tab still exists for traditional FFT exploration, so you can send the padded coefficients of Polynomial A there when you want to compare views.
+                  The polynomial comparison updates automatically as you edit the coefficients or load a preset.
                 </p>
               </div>
 
@@ -312,36 +300,6 @@
                   </p>
                 </section>
               </div>
-
-              <section class="control-section">
-                <div class="trace-build-row">
-                  <div class="trace-build-copy">
-                    <span class="section-kicker">Build The Trace</span>
-                    <p id="build-helper" class="help-text">
-                      Select an FFT phase to auto-build its trace, or use Build Steps to restart the current view from step 1.
-                    </p>
-                  </div>
-                  <button
-                    id="build-btn"
-                    type="button"
-                    class="transport-button transport-button-primary transport-button-build"
-                    title="Build the full FFT teaching trace"
-                    aria-label="Build the full FFT teaching trace"
-                    data-tooltip="Build the full trace"
-                  >
-                    <span class="transport-button-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24">
-                        <path d="M6 6h6"></path>
-                        <path d="M6 12h12"></path>
-                        <path d="M6 18h9"></path>
-                        <path d="M18 6l-2 2"></path>
-                        <path d="M18 6l2 2"></path>
-                      </svg>
-                    </span>
-                    <span class="transport-button-text">Build Steps</span>
-                  </button>
-                </div>
-              </section>
 
               <section class="control-section">
                 <div class="section-head section-head-inline">
@@ -507,9 +465,28 @@
             <div class="transport-strip" aria-label="Playback controls">
               <div class="transport-controls">
                 <button
+                  id="build-btn"
+                  type="button"
+                  class="transport-button transport-button-primary transport-button-icon-only"
+                  title="Build the full FFT teaching trace"
+                  aria-label="Build the full FFT teaching trace"
+                  data-tooltip="Build steps"
+                >
+                  <span class="transport-button-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M6 6h6"></path>
+                      <path d="M6 12h12"></path>
+                      <path d="M6 18h9"></path>
+                      <path d="M18 6l-2 2"></path>
+                      <path d="M18 6l2 2"></path>
+                    </svg>
+                  </span>
+                </button>
+
+                <button
                   id="back-btn"
                   type="button"
-                  class="transport-button transport-button-secondary"
+                  class="transport-button transport-button-secondary transport-button-icon-only"
                   title="Move back one FFT step"
                   aria-label="Move back one FFT step"
                   data-tooltip="Step back"
@@ -520,13 +497,12 @@
                       <path d="M14 8l-7 4 7 4z" class="transport-fill"></path>
                     </svg>
                   </span>
-                  <span class="transport-button-text">Step back</span>
                 </button>
 
                 <button
                   id="step-btn"
                   type="button"
-                  class="transport-button transport-button-secondary"
+                  class="transport-button transport-button-secondary transport-button-icon-only"
                   title="Advance one FFT step"
                   aria-label="Advance one FFT step"
                   data-tooltip="Step forward"
@@ -537,13 +513,12 @@
                       <path d="M10 8l7 4-7 4z" class="transport-fill"></path>
                     </svg>
                   </span>
-                  <span class="transport-button-text">Step forward</span>
                 </button>
 
                 <button
                   id="play-btn"
                   type="button"
-                  class="transport-button transport-button-primary"
+                  class="transport-button transport-button-primary transport-button-icon-only"
                   title="Play the FFT animation"
                   aria-label="Play the FFT animation"
                   data-tooltip="Play"
@@ -553,13 +528,12 @@
                       <path d="M8 6l10 6-10 6z" class="transport-fill"></path>
                     </svg>
                   </span>
-                  <span class="transport-button-text">Play</span>
                 </button>
 
                 <button
                   id="pause-btn"
                   type="button"
-                  class="transport-button transport-button-secondary"
+                  class="transport-button transport-button-secondary transport-button-icon-only"
                   title="Pause the FFT animation"
                   aria-label="Pause the FFT animation"
                   data-tooltip="Pause"
@@ -570,13 +544,12 @@
                       <path d="M15 7v10"></path>
                     </svg>
                   </span>
-                  <span class="transport-button-text">Pause</span>
                 </button>
 
                 <button
                   id="reset-btn"
                   type="button"
-                  class="transport-button transport-button-secondary"
+                  class="transport-button transport-button-secondary transport-button-icon-only"
                   title="Reset the FFT run"
                   aria-label="Reset the FFT run"
                   data-tooltip="Reset"
@@ -587,7 +560,6 @@
                       <path d="M20 4v6h-6"></path>
                     </svg>
                   </span>
-                  <span class="transport-button-text">Reset</span>
                 </button>
               </div>
 
@@ -631,73 +603,8 @@
               </div>
             </section>
           </section>
-        </main>
-        </div>
-        <div class="lab-support-grid" aria-label="FFT stage support panels">
-          <details class="panel info-panel lab-support-card collapse-panel">
-            <summary class="collapse-summary" aria-labelledby="pseudocode-title">
-              <div>
-                <span class="panel-kicker">Pseudocode</span>
-                <h3 id="pseudocode-title" class="panel-title">Iterative FFT Walkthrough</h3>
-              </div>
-              <span class="collapse-hint">Show panel</span>
-            </summary>
 
-            <div class="collapse-body">
-              <p class="card-copy">The current step highlights one specific line in the algorithm.</p>
-              <div id="pseudocode-body" class="pseudocode-body" aria-live="polite"></div>
-            </div>
-          </details>
-
-          <details class="panel info-panel lab-support-card collapse-panel" open>
-            <summary class="collapse-summary" aria-labelledby="step-explanation-title">
-              <div>
-                <span class="panel-kicker">Step Explanation</span>
-                <h3 id="step-explanation-title" class="panel-title">Student-Friendly Narration</h3>
-              </div>
-              <span class="collapse-hint">Hide panel</span>
-            </summary>
-
-            <div class="collapse-body">
-              <p class="card-copy">Every step explains the exact indices, twiddle factor, and updated values.</p>
-              <div class="explanation-stack">
-                <p id="step-explanation" class="explanation-copy">Build steps to begin the guided explanation.</p>
-                <div class="formula-card">
-                  <span class="formula-label">Current formula</span>
-                  <code id="step-formula">No butterfly selected yet.</code>
-                </div>
-              </div>
-            </div>
-          </details>
-
-          <section class="panel bit-reversal-panel lab-support-card" aria-labelledby="bit-reversal-title">
-            <div class="bit-reversal-header">
-              <div>
-                <span class="panel-kicker">Bit-Reversal Trace</span>
-                <h3 id="bit-reversal-title" class="panel-title">Why iterative FFT reorders the input first</h3>
-              </div>
-              <p class="bit-reversal-copy">
-                Reversing binary indices places even/odd recursion layers into the correct in-place circuit order.
-              </p>
-            </div>
-
-            <div class="bit-reversal-grid">
-              <div class="bit-reversal-row">
-                <span class="bit-row-label">Original index order</span>
-                <div id="bit-original-row" class="bit-chip-row" aria-live="polite"></div>
-              </div>
-              <div class="bit-reversal-row">
-                <span class="bit-row-label">Bit-reversed load order</span>
-                <div id="bit-reversed-row" class="bit-chip-row" aria-live="polite"></div>
-              </div>
-            </div>
-
-            <p id="bit-reversal-note" class="bit-reversal-note">
-              Build the trace to step through each reversed-binary mapping.
-            </p>
-          </section>
-
-          <section class="panel history-card lab-support-card lab-support-wide" aria-labelledby="history-title">
+          <section class="panel history-card workspace-history-card" aria-labelledby="history-title">
             <div class="panel-header-row history-header">
               <div>
                 <span class="panel-kicker">Trace</span>
@@ -728,6 +635,21 @@
                 </tbody>
               </table>
             </div>
+          </section>
+        </main>
+        </div>
+        <div class="lab-support-grid" aria-label="FFT stage support panels">
+          <section class="panel info-panel lab-support-card pseudocode-panel" aria-labelledby="pseudocode-title">
+            <div class="panel-header-row panel-header-row-tight">
+              <div>
+                <span class="panel-kicker">Pseudocode</span>
+                <h3 id="pseudocode-title" class="panel-title">Iterative FFT Walkthrough</h3>
+              </div>
+              <p class="card-copy">
+                The active step still highlights the matching line, but the whole algorithm stays visible.
+              </p>
+            </div>
+            <div id="pseudocode-body" class="pseudocode-body pseudocode-body-compact" aria-live="polite"></div>
           </section>
         </div>
       </section>
@@ -815,31 +737,6 @@
             </div>
           </article>
         </div>
-      </section>
-
-      <section id="worked-example" class="section-shell lesson-story" aria-label="Worked example">
-        <div class="section-heading section-heading-spacious">
-          <span class="panel-kicker">10. Worked Example</span>
-          <h2 class="section-title">A small example keeps the pipeline concrete</h2>
-          <p class="section-copy">
-            Use a tiny polynomial product so the steps stay readable. The goal is to understand the
-            flow, not to drown in arithmetic.
-          </p>
-        </div>
-
-        <details class="feature-card lesson-detail" open>
-          <summary>Walk through <code>(1 + 2x)(3 + 4x)</code></summary>
-          <div class="card-body">
-            <div class="phase-list">
-              <div><strong>Coefficient arrays:</strong> A = [1, 2], B = [3, 4]</div>
-              <div><strong>Zero padding:</strong> A = [1, 2, 0, 0], B = [3, 4, 0, 0]</div>
-              <div><strong>FFT step:</strong> convert both padded arrays into value form at special points.</div>
-              <div><strong>Pointwise multiply:</strong> multiply matching FFT values directly.</div>
-              <div><strong>Inverse FFT:</strong> convert back to coefficients.</div>
-              <div><strong>Final coefficients:</strong> [3, 10, 8], so the product is <code>3 + 10x + 8x^2</code>.</div>
-            </div>
-          </div>
-        </details>
       </section>
 
     </div>

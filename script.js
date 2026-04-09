@@ -1,5 +1,5 @@
 const DEFAULT_INPUT_HELP = "Enter a length-8 or length-16 comma-separated signal. Real and complex forms are both supported.";
-const READY_INPUT_HELP = "Valid signal detected. Click Build Steps to generate the full FFT teaching trace.";
+const READY_INPUT_HELP = "Valid signal detected. Steps are built automatically for the current signal.";
 const TOLERANCE = 1e-9;
 
 const SPEED_DELAYS = {
@@ -53,7 +53,6 @@ const POLYNOMIAL_PRESETS = {
     label: "Intro Example",
     a: [1, 2, 3],
     b: [2, 1],
-    note: "This is the classic small worked example: A(x) = 1 + 2x + 3x^2 and B(x) = 2 + x."
   },
   "larger-example": {
     label: "Larger Example",
@@ -90,9 +89,9 @@ const LAB_MODES = {
     visualizerKicker: "Frequency Workbench",
     visualizerTitle: "Inspect the FFT as a staged transform circuit for one signal at a time",
     buildHelp:
-      "Choose a preset or enter a valid signal, then click Build Steps to generate the staged FFT trace for that input.",
+      "Choose a preset or enter a valid signal and the trace builds automatically. Use Build Steps if you want to restart that same run from the beginning.",
     transportHelp:
-      "Frequency mode is selected. Build the trace first, then step or play through the butterfly circuit under the current stage highlight."
+      "Frequency mode is selected. The trace is ready as soon as the input is valid, so you can step or play through the butterfly circuit right away."
   }
 };
 
@@ -122,7 +121,7 @@ const POLYNOMIAL_PHASES = {
     help: "This is the payoff moment: once both polynomials are in value form, matching entries multiply directly."
   },
   inverse: {
-    label: "Inverse FFT",
+    label: "IFFT",
     shortLabel: "Inverse",
     buildable: true,
     help: "Animate the inverse FFT that interpolates the pointwise product back into coefficient form."
@@ -198,6 +197,7 @@ const appState = {
   comparison: null,
   statusText: "Idle",
   statusTone: "idle",
+  hoveredOutputIndex: null,
   frequencyState: {
     rawInput: "",
     selectedSize: 8,
@@ -211,7 +211,7 @@ const appState = {
     result: null,
     statusText: "Waiting",
     statusTone: "idle",
-    statusCopy: "Compare the same polynomial product with a nested-loop convolution and an FFT-based method."
+    statusCopy: "The polynomial comparison updates automatically as you edit the coefficients or load a preset."
   }
 };
 
@@ -789,12 +789,15 @@ function createStep(base) {
     stageLabel: base.stageLabel,
     butterflyIndex: base.butterflyIndex ?? null,
     pairIndices: base.pairIndices ?? null,
+    metadataPairIndices: base.metadataPairIndices ?? null,
     sourceIndex: base.sourceIndex ?? null,
     targetIndex: base.targetIndex ?? null,
     currentValues: base.currentValues ? cloneComplexArray(base.currentValues) : [],
     workingValues: base.workingValues ? cloneComplexArray(base.workingValues) : [],
     twiddlePower: base.twiddlePower ?? null,
     twiddle: base.twiddle ? cloneComplex(base.twiddle) : null,
+    metadataTwiddlePower: base.metadataTwiddlePower ?? null,
+    metadataTwiddle: base.metadataTwiddle ? cloneComplex(base.metadataTwiddle) : null,
     u: base.u ? cloneComplex(base.u) : null,
     lowerValue: base.lowerValue ? cloneComplex(base.lowerValue) : null,
     t: base.t ? cloneComplex(base.t) : null,
@@ -924,6 +927,8 @@ function buildFftSteps(values, options = {}) {
 
   stageDefinitions.forEach((stage) => {
     stageColumns[stage.stageIndex] = cloneComplexArray(working);
+    const firstButterfly = stage.butterflies[0];
+    const firstTwiddle = twiddleFactor(firstButterfly.twiddlePower, firstButterfly.span, direction);
 
     steps.push(
       createStep({
@@ -932,6 +937,9 @@ function buildFftSteps(values, options = {}) {
         kind: "stage-start",
         stageIndex: stage.stageIndex,
         stageLabel: stage.label,
+        metadataPairIndices: [firstButterfly.upper, firstButterfly.lower],
+        metadataTwiddlePower: firstButterfly.twiddlePower,
+        metadataTwiddle: firstTwiddle,
         currentValues: working,
         workingValues: working,
         explanationText:
@@ -1057,6 +1065,8 @@ function buildFftSteps(values, options = {}) {
       stepIndex += 1;
     });
 
+    const lastButterfly = stage.butterflies[stage.butterflies.length - 1];
+    const lastTwiddle = twiddleFactor(lastButterfly.twiddlePower, lastButterfly.span, direction);
     steps.push(
       createStep({
         index: stepIndex,
@@ -1064,6 +1074,9 @@ function buildFftSteps(values, options = {}) {
         kind: "stage-complete",
         stageIndex: stage.stageIndex,
         stageLabel: stage.label,
+        metadataPairIndices: [lastButterfly.upper, lastButterfly.lower],
+        metadataTwiddlePower: lastButterfly.twiddlePower,
+        metadataTwiddle: lastTwiddle,
         currentValues: working,
         workingValues: working,
         explanationText:
@@ -1192,13 +1205,10 @@ function cacheDom() {
   dom.polyInputA = document.getElementById("poly-input-a");
   dom.polyInputB = document.getElementById("poly-input-b");
   dom.polyPresetNote = document.getElementById("poly-preset-note");
-  dom.polyCompareButton = document.getElementById("poly-compare-btn");
-  dom.polyLoadButton = document.getElementById("poly-load-fft-btn");
   dom.polyStatusBadge = document.getElementById("poly-status-badge");
   dom.polySizeBadge = document.getElementById("poly-size-badge");
   dom.polyMatchBadge = document.getElementById("poly-match-badge");
   dom.polyStatusCopy = document.getElementById("poly-status-copy");
-  dom.polyLoadNote = document.getElementById("poly-load-note");
   dom.polyPipelineList = document.getElementById("poly-pipeline-list");
   dom.polyFinalResult = document.getElementById("poly-final-result");
   dom.polyExpressionA = document.getElementById("poly-expression-a");
@@ -1218,8 +1228,20 @@ function hasPolynomialUi() {
   return Boolean(
     dom.polyInputA &&
     dom.polyInputB &&
-    dom.polyCompareButton &&
-    dom.polyLoadButton
+    dom.polyPresetNote &&
+    dom.polyStatusBadge &&
+    dom.polySizeBadge &&
+    dom.polyMatchBadge &&
+    dom.polyStatusCopy &&
+    dom.polyPipelineList &&
+    dom.polyFinalResult &&
+    dom.polyExpressionA &&
+    dom.polyExpressionB &&
+    dom.polyExpressionResult &&
+    dom.polyNaiveResult &&
+    dom.polyNaiveCost &&
+    dom.polyFftResult &&
+    dom.polyFftCost
   );
 }
 
@@ -1298,6 +1320,99 @@ function setStatus(text, tone) {
   appState.statusTone = tone;
 }
 
+function formatPairIndices(pairIndices) {
+  return pairIndices ? `(${pairIndices[0]}, ${pairIndices[1]})` : "--";
+}
+
+function formatTwiddleDisplay(power, value) {
+  if (power === null || power === undefined || !value) {
+    return "--";
+  }
+  return `w^${power} = ${formatComplex(value, 2)}`;
+}
+
+function getDisplayMetadataForStep(step = null) {
+  if (step && step.phase === "bit-reversal") {
+    return {
+      indicesText: `${step.sourceIndex} -> ${step.targetIndex}`,
+      twiddleText: "not used"
+    };
+  }
+
+  if (step && step.phase === "output") {
+    return {
+      indicesText: isPolynomialMode() ? "coefficient positions" : "output bins",
+      twiddleText: "complete"
+    };
+  }
+
+  if (step && step.pairIndices && step.twiddle) {
+    return {
+      indicesText: formatPairIndices(step.pairIndices),
+      twiddleText: formatTwiddleDisplay(step.twiddlePower, step.twiddle)
+    };
+  }
+
+  if (step && step.metadataPairIndices && step.metadataTwiddle) {
+    return {
+      indicesText: formatPairIndices(step.metadataPairIndices),
+      twiddleText: formatTwiddleDisplay(step.metadataTwiddlePower, step.metadataTwiddle)
+    };
+  }
+
+  const candidates = appState.steps.filter((candidate) => candidate.pairIndices && candidate.twiddle);
+  if (!candidates.length) {
+    return null;
+  }
+
+  if (!step) {
+    return {
+      indicesText: `next ${formatPairIndices(candidates[0].pairIndices)}`,
+      twiddleText: `next ${formatTwiddleDisplay(candidates[0].twiddlePower, candidates[0].twiddle)}`
+    };
+  }
+
+  const currentIndex = typeof step.index === "number" ? step.index : appState.currentStepIndex;
+  const sameStageCandidates = candidates.filter((candidate) => candidate.stageIndex === step.stageIndex);
+  if (sameStageCandidates.length) {
+    const stageChoice = step.kind === "stage-complete"
+      ? sameStageCandidates[sameStageCandidates.length - 1]
+      : sameStageCandidates[0];
+    return {
+      indicesText: formatPairIndices(stageChoice.pairIndices),
+      twiddleText: formatTwiddleDisplay(stageChoice.twiddlePower, stageChoice.twiddle)
+    };
+  }
+
+  const nextCandidate = candidates.find((candidate) => candidate.index > currentIndex);
+  if (nextCandidate) {
+    return {
+      indicesText: `next ${formatPairIndices(nextCandidate.pairIndices)}`,
+      twiddleText: `next ${formatTwiddleDisplay(nextCandidate.twiddlePower, nextCandidate.twiddle)}`
+    };
+  }
+
+  const previousCandidate = candidates.slice().reverse().find((candidate) => candidate.index < currentIndex);
+  if (previousCandidate) {
+    return {
+      indicesText: formatPairIndices(previousCandidate.pairIndices),
+      twiddleText: formatTwiddleDisplay(previousCandidate.twiddlePower, previousCandidate.twiddle)
+    };
+  }
+
+  return null;
+}
+
+function setHoveredOutputIndex(index) {
+  const normalizedIndex = Number.isInteger(index) ? index : null;
+  if (appState.hoveredOutputIndex === normalizedIndex) {
+    return;
+  }
+  appState.hoveredOutputIndex = normalizedIndex;
+  renderVisualization();
+  renderFrequencyOutput();
+}
+
 function clearPlaybackTimer() {
   if (appState.playTimer) {
     clearInterval(appState.playTimer);
@@ -1311,6 +1426,7 @@ function invalidateTrace() {
   appState.steps = [];
   appState.currentStepIndex = -1;
   appState.isBuilt = false;
+  appState.hoveredOutputIndex = null;
 }
 
 function getCurrentStep() {
@@ -1324,6 +1440,9 @@ function getRenderableData() {
   const currentStep = getCurrentStep();
   if (currentStep) {
     return currentStep.renderData;
+  }
+  if (appState.isBuilt && appState.steps.length && appState.currentStepIndex < 0) {
+    return appState.steps[0].renderData;
   }
   return appState.previewData;
 }
@@ -1579,7 +1698,7 @@ function updateButtons() {
     ? Boolean(getActivePolynomialTraceSource())
     : appState.inputValid;
   const hasTrace = appState.isBuilt && appState.steps.length > 0;
-  const atStart = !hasTrace || appState.currentStepIndex <= 0;
+  const atStart = !hasTrace || appState.currentStepIndex < 0;
   const atEnd = hasTrace && appState.currentStepIndex >= appState.steps.length - 1;
 
   dom.buildButton.disabled = !hasValidInput || appState.isPlaying;
@@ -1618,6 +1737,7 @@ function renderStatus() {
 
 function renderActionStrip() {
   const currentStep = getCurrentStep();
+  const displayMetadata = getDisplayMetadataForStep(currentStep);
 
   if (isPolynomialMode() && !currentStep) {
     const result = appState.polynomial.result;
@@ -1665,12 +1785,17 @@ function renderActionStrip() {
 
     const source = getActivePolynomialTraceSource();
     if (source) {
-      dom.actionTitle.textContent = source.previewTitle;
-      dom.actionCopy.textContent = source.previewCopy;
+      const isBuiltPreview = appState.isBuilt && appState.steps.length > 0;
+      dom.actionTitle.textContent = isBuiltPreview ? "Steps built and ready." : source.previewTitle;
+      dom.actionCopy.textContent = isBuiltPreview
+        ? `Press Step forward or Play to begin the ${getSelectedPolynomialPhase().shortLabel} trace. Bit-reversal loads the circuit first, then the butterfly stages evaluate the polynomial at roots of unity.`
+        : source.previewCopy;
       dom.actionPhase.textContent = `Phase: ${getSelectedPolynomialPhase().label}`;
-      dom.actionStage.textContent = `Stage: ${Math.log2(result.paddedSize)} layers`;
-      dom.actionIndices.textContent = "Indices: --";
-      dom.actionTwiddle.textContent = phase === "inverse" ? "Twiddle: inverse roots" : "Twiddle: roots of unity";
+      dom.actionStage.textContent = isBuiltPreview ? "Stage: bit-reversal ready" : `Stage: ${Math.log2(result.paddedSize)} layers`;
+      dom.actionIndices.textContent = displayMetadata ? `Indices: ${displayMetadata.indicesText}` : "Indices: --";
+      dom.actionTwiddle.textContent = displayMetadata
+        ? `Twiddle: ${displayMetadata.twiddleText}`
+        : phase === "inverse" ? "Twiddle: inverse roots" : "Twiddle: roots of unity";
       return;
     }
   }
@@ -1689,17 +1814,23 @@ function renderActionStrip() {
       return;
     }
 
-    if (currentStep.pairIndices) {
-      dom.actionIndices.textContent = `Indices: ${currentStep.pairIndices[0]}, ${currentStep.pairIndices[1]}`;
-    } else {
-      dom.actionIndices.textContent = "Indices: --";
-    }
+    dom.actionIndices.textContent = displayMetadata ? `Indices: ${displayMetadata.indicesText}` : "Indices: --";
+    dom.actionTwiddle.textContent = displayMetadata ? `Twiddle: ${displayMetadata.twiddleText}` : "Twiddle: --";
+    return;
+  }
 
-    if (currentStep.twiddle) {
-      dom.actionTwiddle.textContent = `Twiddle: omega_${2 ** (currentStep.stageIndex + 1)}^${currentStep.twiddlePower} = ${formatComplex(currentStep.twiddle, 2)}`;
-    } else {
-      dom.actionTwiddle.textContent = "Twiddle: --";
-    }
+  if (appState.isBuilt && appState.steps.length) {
+    const previewStep = appState.steps[0];
+    dom.actionTitle.textContent = "Steps built and ready.";
+    dom.actionCopy.textContent = isPolynomialMode()
+      ? "This trace is ready to start. The circuit will walk through bit-reversal first, then show the butterfly stages for the active polynomial phase."
+      : "This trace is ready to start. Step forward or press Play to move from bit-reversal into the butterfly stages.";
+    dom.actionPhase.textContent = isPolynomialMode()
+      ? `Phase: ${getSelectedPolynomialPhase().label}`
+      : `Phase: ${getCurrentPhaseLabel()}`;
+    dom.actionStage.textContent = previewStep ? "Stage: bit-reversal first" : "Stage: preview ready";
+    dom.actionIndices.textContent = displayMetadata ? `Indices: ${displayMetadata.indicesText}` : "Indices: --";
+    dom.actionTwiddle.textContent = displayMetadata ? `Twiddle: ${displayMetadata.twiddleText}` : "Twiddle: --";
     return;
   }
 
@@ -1708,7 +1839,7 @@ function renderActionStrip() {
     dom.actionCopy.textContent = `Build steps to animate the bit-reversal permutation and the ${Math.log2(appState.selectedSize)} butterfly stages.`;
     dom.actionPhase.textContent = "Phase: Preview";
     dom.actionStage.textContent = `Stage: ${Math.log2(appState.selectedSize)} layers`;
-    dom.actionIndices.textContent = "Indices: --";
+    dom.actionIndices.textContent = displayMetadata ? `Indices: ${displayMetadata.indicesText}` : "Indices: --";
     dom.actionTwiddle.textContent = "Twiddle: preview only";
     return;
   }
@@ -1806,7 +1937,7 @@ function renderExplanation() {
     if (!result) {
       dom.stepExplanation.textContent =
         "Start by comparing naive multiplication with FFT-based multiplication. Then the app pads the coefficients, evaluates them, multiplies matching values, and interpolates the result.";
-      dom.stepFormula.textContent = "Enter A(x) and B(x), then click Compare Naive vs FFT.";
+      dom.stepFormula.textContent = "Enter A(x) and B(x) to compare naive and FFT multiplication automatically.";
       return;
     }
 
@@ -1834,7 +1965,9 @@ function renderExplanation() {
     const source = getActivePolynomialTraceSource();
     if (source) {
       dom.stepExplanation.textContent =
-        `${source.previewCopy} Build steps to watch the bit-reversal load, stage setup, butterflies, and final outputs for this phase.`;
+        appState.isBuilt && appState.steps.length
+          ? `${source.previewCopy} The steps are already built, so you can press Step forward or Play to watch the bit-reversal load, stage setup, butterflies, and final outputs for this phase.`
+          : `${source.previewCopy} Build steps to watch the bit-reversal load, stage setup, butterflies, and final outputs for this phase.`;
       dom.stepFormula.textContent = appState.polynomial.selectedPhase === "inverse"
         ? "coefficients <- inverse_FFT(pointwise product)"
         : `${getSelectedPolynomialPhase().shortLabel} <- FFT(padded coefficients)`;
@@ -1843,9 +1976,12 @@ function renderExplanation() {
   }
 
   if (appState.inputValid) {
-    dom.stepExplanation.textContent =
-      "Preview mode shows the circuit layout. Build steps to get line-by-line explanations for bit reversal, stage setup, butterfly computation, and result updates.";
-    dom.stepFormula.textContent = "Build steps to activate live formulas.";
+    dom.stepExplanation.textContent = appState.isBuilt && appState.steps.length
+      ? "The trace is ready. Use Step forward or Play to move from bit reversal into the butterfly computations and final FFT output."
+      : "Preview mode shows the circuit layout. Build steps to get line-by-line explanations for bit reversal, stage setup, butterfly computation, and result updates.";
+    dom.stepFormula.textContent = appState.isBuilt && appState.steps.length
+      ? "Step or Play to activate live formulas."
+      : "Build steps to activate live formulas.";
     return;
   }
 
@@ -1919,16 +2055,20 @@ function renderFrequencyOutput() {
   if (!isComplete) {
     dom.frequencyOutputSummary.textContent = appState.isBuilt
       ? "Finish the animation or jump to the last step to reveal the final FFT bins."
-      : "Build the trace, then run it to the end to reveal the final FFT bins.";
+      : "Load a valid signal and the trace will build automatically. Then run it to the end to reveal the final FFT bins.";
     const row = document.createElement("tr");
     row.innerHTML = '<td colspan="4" class="cell-muted">Final FFT bins appear here after the trace completes.</td>';
     dom.frequencyOutputBody.appendChild(row);
     return;
   }
 
-  dom.frequencyOutputSummary.textContent = "The completed transform is listed below with real, imaginary, and magnitude values for each output bin.";
+  dom.frequencyOutputSummary.textContent = "The completed transform is listed below. Hover a bin in the circuit or in this table to match the output value row.";
   appState.comparison.iterativeOutput.forEach((value, index) => {
     const row = document.createElement("tr");
+    row.dataset.outputIndex = String(index);
+    if (appState.hoveredOutputIndex === index) {
+      row.classList.add("is-highlight");
+    }
     row.innerHTML = `
       <td>${index}</td>
       <td>${formatNumber(value.re, 4)}</td>
@@ -1970,8 +2110,12 @@ function renderBitReversalPanel() {
   }
 
   if (!appState.inputValid) {
-    dom.bitReversalNote.textContent = "Build the trace to step through each reversed-binary mapping.";
+    dom.bitReversalNote.textContent = "Load a valid trace source to step through each reversed-binary mapping.";
     return;
+  }
+
+  if (appState.isBuilt && appState.currentStepIndex < 0) {
+    dom.bitReversalNote.textContent = "Steps are ready. The first moves place values into bit-reversed order before the butterfly stages begin.";
   }
 
   const renderData = getRenderableData();
@@ -2009,6 +2153,9 @@ function renderBitReversalPanel() {
   if (currentStep && currentStep.phase === "bit-reversal") {
     dom.bitReversalNote.textContent =
       `Current mapping: reverse_bits(${currentStep.sourceIndex}) = ${currentStep.targetIndex}. This places x[${currentStep.sourceIndex}] where the iterative stages expect it.`;
+  } else if (appState.isBuilt && appState.currentStepIndex < 0) {
+    dom.bitReversalNote.textContent =
+      "Steps are ready. The first moves place values into bit-reversed order before the butterfly stages begin.";
   } else {
     dom.bitReversalNote.textContent =
       "Iterative FFT uses bit-reversal so the fixed stage schedule matches the same even/odd decomposition that the recursive FFT would build naturally.";
@@ -2295,14 +2442,31 @@ function renderVisualization() {
   const depth = renderData.depth;
   const stageDefinitions = buildStageDefinitions(size);
   const isCompactLayout = size === 16;
-  const rowSpacing = isCompactLayout ? 34 : 50;
-  const topMargin = 88;
-  const leftMargin = 52;
-  const columnSpacing = isCompactLayout ? 162 : 188;
-  const pillWidth = isCompactLayout ? 98 : 112;
-  const pillHeight = 26;
-  const totalWidth = leftMargin + (depth + 1) * columnSpacing + 180;
-  const totalHeight = topMargin + size * rowSpacing + 58;
+  const baseRowSpacing = isCompactLayout ? 34 : 50;
+  const baseTopMargin = 88;
+  const baseLeftMargin = 82;
+  const baseColumnSpacing = isCompactLayout ? 162 : 188;
+  const basePillWidth = isCompactLayout ? 98 : 112;
+  const baseLabelOffset = 64;
+  const baseTrailingWidth = 180;
+  const circuitWidth = dom.fftSvg.parentElement ? dom.fftSvg.parentElement.clientWidth : 0;
+  const baseTotalWidth = baseLeftMargin + baseLabelOffset + (depth + 1) * baseColumnSpacing + baseTrailingWidth;
+  const horizontalScale = circuitWidth && circuitWidth < baseTotalWidth
+    ? Math.max(0.74, circuitWidth / baseTotalWidth)
+    : 1;
+  const verticalScale = horizontalScale < 0.88 ? 0.9 : 1;
+  const rowSpacing = baseRowSpacing * verticalScale;
+  const topMargin = baseTopMargin * verticalScale;
+  const leftMargin = baseLeftMargin * horizontalScale;
+  const columnSpacing = baseColumnSpacing * horizontalScale;
+  const pillWidth = basePillWidth * horizontalScale;
+  const pillHeight = 26 * verticalScale;
+  const labelOffset = baseLabelOffset * horizontalScale;
+  const indexPillWidth = 54 * horizontalScale;
+  const indexPillHeight = 28 * verticalScale;
+  const indexColumnX = leftMargin - 38 * horizontalScale;
+  const totalWidth = leftMargin + labelOffset + (depth + 1) * columnSpacing + baseTrailingWidth * horizontalScale;
+  const totalHeight = topMargin + (size - 1) * rowSpacing + 58;
 
   dom.fftSvg.innerHTML = "";
   dom.fftSvg.setAttribute("viewBox", `0 0 ${totalWidth} ${totalHeight}`);
@@ -2314,14 +2478,14 @@ function renderVisualization() {
       label: labels.inputLabel || "Input",
       meta: labels.inputMeta || "x[i]",
       values: renderData.originalValues,
-      x: leftMargin + 64
+      x: leftMargin + labelOffset
     },
     {
       key: "bit-reversal",
       label: labels.bitLabel || "Bit-Reversed",
       meta: labels.bitMeta || "A[r]",
       values: renderData.bitReversalProgress,
-      x: leftMargin + 64 + columnSpacing
+      x: leftMargin + labelOffset + columnSpacing
     }
   ];
 
@@ -2332,7 +2496,7 @@ function renderVisualization() {
       label: index === depth - 1 ? (labels.outputLabel || `${stage.label} / Output`) : stage.label,
       meta: index === depth - 1 ? (labels.outputMeta || stage.metaLabel) : stage.metaLabel,
       values: renderData.stageColumns[index],
-      x: leftMargin + 64 + columnSpacing * (index + 2)
+      x: leftMargin + labelOffset + columnSpacing * (index + 2)
     });
   });
 
@@ -2353,10 +2517,10 @@ function renderVisualization() {
     dom.fftSvg.appendChild(
       createSvgNode("rect", {
         class: "fft-index-pill-bg",
-        x: 16,
-        y: y - 14,
-        width: 46,
-        height: 28,
+        x: indexColumnX - indexPillWidth / 2,
+        y: y - indexPillHeight / 2,
+        width: indexPillWidth,
+        height: indexPillHeight,
         rx: 14,
         ry: 14
       })
@@ -2365,12 +2529,21 @@ function renderVisualization() {
     dom.fftSvg.appendChild(
       createSvgNode("text", {
         class: "fft-index-pill-text",
-        x: 39,
+        x: indexColumnX,
         y: y + 4,
-        textContent: `i${row}`
+        textContent: String(row)
       })
     );
   }
+
+  dom.fftSvg.appendChild(
+    createSvgNode("text", {
+      class: "fft-column-label",
+      x: indexColumnX,
+      y: 34,
+      textContent: "Index"
+    })
+  );
 
   dom.fftSvg.appendChild(
     createSvgNode("rect", {
@@ -2502,12 +2675,12 @@ function renderVisualization() {
 
       if (shouldShowTwiddleLabel(currentStep, stageIndex, butterfly, size)) {
         const labelX = (xLeft + xRight) / 2;
-        const labelY = (yUpper + yLower) / 2 + 6;
+        const labelBaselineY = Math.max(66 * verticalScale, yUpper - 10 * verticalScale);
         butterflyGroup.appendChild(
           createSvgNode("rect", {
             class: "fft-twiddle-chip",
             x: labelX - 34,
-            y: labelY - 12,
+            y: labelBaselineY - 14,
             width: 68,
             height: 20,
             rx: 10,
@@ -2518,7 +2691,7 @@ function renderVisualization() {
           createSvgNode("text", {
             class: "fft-twiddle-text",
             x: labelX,
-            y: labelY + 2,
+            y: labelBaselineY,
             textContent: `w^${butterfly.twiddlePower}`
           })
         );
@@ -2535,6 +2708,8 @@ function renderVisualization() {
       const stateClass = getNodeState(currentStep, column.key, column.stageIndex ?? -1, row, renderData);
       const bgClasses = ["fft-value-pill-bg"];
       const textClasses = ["fft-value-pill-text"];
+      const isOutputNode = appState.mode === "frequency" && column.key === "stage" && column.stageIndex === depth - 1;
+      const isHoveredOutput = isOutputNode && appState.hoveredOutputIndex === row;
 
       if (!value) {
         bgClasses.push("is-future");
@@ -2544,47 +2719,76 @@ function renderVisualization() {
       if (stateClass) {
         bgClasses.push(stateClass);
       }
+      if (isHoveredOutput) {
+        bgClasses.push("is-hovered");
+        textClasses.push("is-hovered");
+      }
 
-      dom.fftSvg.appendChild(
-        createSvgNode("rect", {
-          class: bgClasses.join(" "),
-          x: column.x - pillWidth / 2,
-          y: y - pillHeight / 2,
-          width: pillWidth,
-          height: pillHeight,
-          rx: 14,
-          ry: 14
-        })
-      );
+      if (isOutputNode) {
+        const outputGroup = createSvgNode("g", {
+          class: `fft-output-node${isHoveredOutput ? " is-hovered" : ""}`,
+          "data-output-index": String(row)
+        });
+        outputGroup.appendChild(
+          createSvgNode("rect", {
+            class: bgClasses.join(" "),
+            x: column.x - pillWidth / 2,
+            y: y - pillHeight / 2,
+            width: pillWidth,
+            height: pillHeight,
+            rx: 14,
+            ry: 14
+          })
+        );
+        outputGroup.appendChild(
+          createSvgNode("text", {
+            class: textClasses.join(" "),
+            x: column.x,
+            y: y + 4,
+            textContent: value ? formatComplexCompact(value) : "--"
+          })
+        );
+        dom.fftSvg.appendChild(outputGroup);
+      } else {
+        dom.fftSvg.appendChild(
+          createSvgNode("rect", {
+            class: bgClasses.join(" "),
+            x: column.x - pillWidth / 2,
+            y: y - pillHeight / 2,
+            width: pillWidth,
+            height: pillHeight,
+            rx: 14,
+            ry: 14
+          })
+        );
 
-      dom.fftSvg.appendChild(
-        createSvgNode("text", {
-          class: textClasses.join(" "),
-          x: column.x,
-          y: y + 4,
-          textContent: value ? formatComplexCompact(value) : "--"
-        })
-      );
+        dom.fftSvg.appendChild(
+          createSvgNode("text", {
+            class: textClasses.join(" "),
+            x: column.x,
+            y: y + 4,
+            textContent: value ? formatComplexCompact(value) : "--"
+          })
+        );
+      }
     }
   });
 }
 
 function describeHistoryIndices(step) {
-  if (step.phase === "bit-reversal") {
-    return `${step.sourceIndex} -> ${step.targetIndex}`;
-  }
-  if (step.pairIndices) {
-    return `${step.pairIndices[0]}, ${step.pairIndices[1]}`;
+  const metadata = getDisplayMetadataForStep(step);
+  if (metadata) {
+    return metadata.indicesText;
   }
   return "--";
 }
 
 function describeHistoryTwiddle(step) {
-  if (!step.twiddle) {
-    return "--";
+  const metadata = getDisplayMetadataForStep(step);
+  if (metadata) {
+    return metadata.twiddleText;
   }
-  const span = 2 ** (step.stageIndex + 1);
-  return `omega_${span}^${step.twiddlePower}`;
+  return "--";
 }
 
 function getHistorySnapshot(step) {
@@ -2595,6 +2799,24 @@ function getHistorySnapshot(step) {
     return formatValuesPreview(step.workingValues, 5);
   }
   return formatValuesPreview(step.renderData.originalValues, 5);
+}
+
+function formatHistoryPhaseLabel(phase) {
+  if (!phase) {
+    return "--";
+  }
+  return phase
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;");
 }
 
 function renderHistory() {
@@ -2615,6 +2837,11 @@ function renderHistory() {
     const row = document.createElement("tr");
     row.classList.add("history-row-clickable");
     row.dataset.stepIndex = String(index);
+    const phaseLabel = formatHistoryPhaseLabel(step.phase);
+    const stageLabel = step.stageLabel || "--";
+    const indicesLabel = describeHistoryIndices(step);
+    const twiddleLabel = describeHistoryTwiddle(step);
+    const snapshot = getHistorySnapshot(step);
 
     if (index === appState.currentStepIndex) {
       row.classList.add("history-row-current");
@@ -2623,13 +2850,13 @@ function renderHistory() {
     }
 
     row.innerHTML = `
-      <td>${index + 1}</td>
-      <td><span class="history-phase-pill">${step.phase}</span></td>
-      <td><span class="history-stage-pill">${step.stageLabel || "--"}</span></td>
-      <td>${describeHistoryIndices(step)}</td>
-      <td><span class="history-twiddle-pill">${describeHistoryTwiddle(step)}</span></td>
-      <td>${step.actionText}</td>
-      <td><span class="snapshot-code">${getHistorySnapshot(step)}</span></td>
+      <td><span class="history-step-index">${index + 1}</span></td>
+      <td><span class="history-phase-pill" title="${escapeHtml(phaseLabel)}">${escapeHtml(phaseLabel)}</span></td>
+      <td><span class="history-stage-pill" title="${escapeHtml(stageLabel)}">${escapeHtml(stageLabel)}</span></td>
+      <td><span class="history-inline-code" title="${escapeHtml(indicesLabel)}">${escapeHtml(indicesLabel)}</span></td>
+      <td><span class="history-twiddle-pill" title="${escapeHtml(twiddleLabel)}">${escapeHtml(twiddleLabel)}</span></td>
+      <td><span class="history-action-copy" title="${escapeHtml(step.actionText)}">${escapeHtml(step.actionText)}</span></td>
+      <td><span class="history-snapshot" title="${escapeHtml(snapshot)}">${escapeHtml(snapshot)}</span></td>
     `;
 
     dom.historyBody.appendChild(row);
@@ -2638,6 +2865,9 @@ function renderHistory() {
 
 // Refresh the polynomial preset button state so the selected example is obvious.
 function updatePolynomialPresetSelection() {
+  if (!dom.polyPresetButtons || !dom.polyPresetButtons.length) {
+    return;
+  }
   dom.polyPresetButtons.forEach((button) => {
     button.classList.toggle("is-selected", button.dataset.polyPreset === appState.polynomial.selectedPreset);
   });
@@ -2651,18 +2881,19 @@ function renderPolynomialSection() {
 
   const polynomialState = appState.polynomial;
   const result = polynomialState.result;
+  const selectedPreset = polynomialState.selectedPreset
+    ? POLYNOMIAL_PRESETS[polynomialState.selectedPreset]
+    : null;
 
   dom.polyStatusBadge.textContent = polynomialState.statusText;
   dom.polyStatusBadge.dataset.state = polynomialState.statusTone;
   dom.polyStatusCopy.textContent = polynomialState.statusCopy;
-  dom.polyPresetNote.textContent = polynomialState.selectedPreset
-    ? POLYNOMIAL_PRESETS[polynomialState.selectedPreset].note
-    : POLYNOMIAL_DEFAULT_NOTE;
+  dom.polyPresetNote.textContent = selectedPreset ? selectedPreset.note : POLYNOMIAL_DEFAULT_NOTE;
   dom.polySizeBadge.textContent = result ? String(result.paddedSize) : "--";
   updatePolynomialPresetSelection();
 
   if (!result) {
-    dom.polyMatchBadge.textContent = "Run Comparison";
+    dom.polyMatchBadge.textContent = "Waiting";
     dom.polyMatchBadge.className = "comparison-badge comparison-badge-idle";
     dom.polyPipelineList.innerHTML = `
       <li>Start with two coefficient lists in ordinary polynomial form.</li>
@@ -2679,9 +2910,6 @@ function renderPolynomialSection() {
     dom.polyNaiveCost.textContent = "--";
     dom.polyFftResult.textContent = "--";
     dom.polyFftCost.textContent = "--";
-    dom.polyLoadButton.disabled = true;
-    dom.polyLoadNote.textContent =
-      "The frequency tab keeps the classic one-signal FFT interpretation, so this button sends the padded coefficients of Polynomial A there when you want to compare the two views.";
     return;
   }
 
@@ -2704,10 +2932,6 @@ function renderPolynomialSection() {
   dom.polyNaiveCost.textContent = `${result.naiveCost} coefficient products (${result.coefficientsA.length} x ${result.coefficientsB.length})`;
   dom.polyFftResult.textContent = formatRealList(result.fftResult);
   dom.polyFftCost.textContent = `About ${Math.round(result.fftWorkEstimate)} structured operations using ${result.paddedSize}-point FFT passes`;
-  dom.polyLoadButton.disabled = !result.visualizerCompatible;
-  dom.polyLoadNote.textContent = result.visualizerCompatible
-    ? "Polynomial A can be sent directly to the frequency tab because the padded length matches a supported circuit size."
-    : "This product uses a padded size outside the current 8/16 teaching circuits, so the frequency-view handoff is disabled.";
 }
 
 function renderAll() {
@@ -2722,9 +2946,7 @@ function renderAll() {
   renderActionStrip();
   renderCounters();
   renderPseudocode();
-  renderExplanation();
   renderComparison();
-  renderBitReversalPanel();
   renderVisualization();
   renderFrequencyOutput();
   renderHistory();
@@ -2753,8 +2975,7 @@ function refreshInputState() {
   appState.inputValid = true;
   appState.previewData = buildPreviewData(parsed.values);
   appState.comparison = compareIterativeAndRecursive(parsed.values);
-  setStatus("Ready", "ready");
-  renderAll();
+  buildTrace();
 }
 
 function handleInputChange() {
@@ -2808,15 +3029,33 @@ function handlePolynomialInputChange() {
   appState.polynomial.rawA = dom.polyInputA.value.trim();
   appState.polynomial.rawB = dom.polyInputB.value.trim();
   appState.polynomial.selectedPreset = null;
-  appState.polynomial.result = null;
-  appState.polynomial.statusText = "Edited";
-  appState.polynomial.statusTone = "paused";
-  appState.polynomial.statusCopy = "Coefficient lists changed. Click Compare Naive vs FFT to recompute the product.";
-  if (isPolynomialMode()) {
-    refreshPolynomialModeState();
+  if (!appState.polynomial.rawA && !appState.polynomial.rawB) {
+    appState.polynomial.result = null;
+    appState.polynomial.statusText = "Waiting";
+    appState.polynomial.statusTone = "idle";
+    appState.polynomial.statusCopy = "Enter two coefficient lists to compare naive multiplication with the FFT pipeline automatically.";
+    if (isPolynomialMode()) {
+      refreshPolynomialModeState();
+      return;
+    }
+    renderAll();
     return;
   }
-  renderAll();
+
+  if (!appState.polynomial.rawA || !appState.polynomial.rawB) {
+    appState.polynomial.result = null;
+    appState.polynomial.statusText = "Waiting";
+    appState.polynomial.statusTone = "idle";
+    appState.polynomial.statusCopy = "Enter both coefficient lists and the polynomial comparison will update automatically.";
+    if (isPolynomialMode()) {
+      refreshPolynomialModeState();
+      return;
+    }
+    renderAll();
+    return;
+  }
+
+  comparePolynomialInputs();
 }
 
 // Load one of the polynomial multiplication presets into both coefficient inputs.
@@ -2880,7 +3119,7 @@ function comparePolynomialInputs() {
   appState.polynomial.statusText = "Compared";
   appState.polynomial.statusTone = appState.polynomial.result.matches ? "complete" : "error";
   appState.polynomial.statusCopy = appState.polynomial.result.matches
-    ? "Naive convolution and FFT-based multiplication produced the same coefficient result."
+    ? "Naive convolution and FFT-based multiplication produced the same coefficient result automatically."
     : "The two methods disagreed, which means something needs debugging.";
   if (isPolynomialMode()) {
     refreshPolynomialModeState();
@@ -2890,32 +3129,6 @@ function comparePolynomialInputs() {
     return;
   }
   renderAll();
-}
-
-// Push the padded coefficients of Polynomial A into the frequency tab for the classic FFT view.
-function loadPolynomialIntoVisualizer() {
-  if (!hasPolynomialUi()) {
-    return;
-  }
-
-  const result = appState.polynomial.result;
-  if (!result || !result.visualizerCompatible) {
-    return;
-  }
-
-  appState.frequencyState.selectedSize = result.paddedSize;
-  appState.frequencyState.selectedPreset = null;
-  appState.frequencyState.rawInput = serializeValues(realCoefficientsToComplex(result.paddedA));
-  appState.rawInput = appState.frequencyState.rawInput;
-  appState.selectedPreset = null;
-  appState.selectedSize = result.paddedSize;
-  if (dom.customInput) {
-    dom.customInput.value = appState.rawInput;
-  }
-  if (dom.presetNote) {
-    dom.presetNote.textContent = "Loaded padded Polynomial A into the frequency view so you can compare the same coefficients under the classic FFT interpretation.";
-  }
-  setLabMode("frequency");
 }
 
 function buildTrace() {
@@ -2938,9 +3151,9 @@ function buildTrace() {
 
   clearPlaybackTimer();
   appState.steps = buildFftSteps(appState.parsedValues, buildOptions);
-  appState.currentStepIndex = 0;
+  appState.currentStepIndex = -1;
   appState.isBuilt = true;
-  setStatus("Built", "ready");
+  setStatus("Steps built!", "ready");
   renderAll();
 }
 
@@ -2949,10 +3162,12 @@ function moveToStep(stepIndex) {
     return;
   }
 
-  appState.currentStepIndex = Math.max(0, Math.min(stepIndex, appState.steps.length - 1));
+  appState.currentStepIndex = Math.max(-1, Math.min(stepIndex, appState.steps.length - 1));
 
   if (appState.currentStepIndex >= appState.steps.length - 1) {
     setStatus("Complete", "complete");
+  } else if (appState.currentStepIndex < 0) {
+    setStatus("Steps built!", "ready");
   } else if (!appState.isPlaying) {
     setStatus("Paused", "paused");
   }
@@ -2961,12 +3176,12 @@ function moveToStep(stepIndex) {
 }
 
 function stepBackward() {
-  if (!appState.isBuilt || appState.currentStepIndex <= 0) {
+  if (!appState.isBuilt || appState.currentStepIndex < 0) {
     return;
   }
 
   appState.currentStepIndex -= 1;
-  setStatus("Step-by-step", "paused");
+  setStatus(appState.currentStepIndex < 0 ? "Steps built!" : "Step-by-step", appState.currentStepIndex < 0 ? "ready" : "paused");
   renderAll();
 }
 
@@ -2992,6 +3207,9 @@ function startPlayback() {
   clearPlaybackTimer();
   appState.isPlaying = true;
   setStatus("Playing", "playing");
+  if (appState.currentStepIndex < 0) {
+    appState.currentStepIndex = 0;
+  }
   renderAll();
 
   appState.playTimer = setInterval(() => {
@@ -3024,8 +3242,8 @@ function resetTrace() {
     return;
   }
   clearPlaybackTimer();
-  appState.currentStepIndex = 0;
-  setStatus("Reset", "paused");
+  appState.currentStepIndex = -1;
+  setStatus("Steps built!", "ready");
   renderAll();
 }
 
@@ -3073,13 +3291,34 @@ function bindEvents() {
   dom.playButton.addEventListener("click", startPlayback);
   dom.pauseButton.addEventListener("click", pausePlayback);
   dom.resetButton.addEventListener("click", resetTrace);
-  if (dom.polyCompareButton) {
-    dom.polyCompareButton.addEventListener("click", comparePolynomialInputs);
+  dom.fftSvg.addEventListener("mouseover", (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+    const outputNode = event.target.closest("[data-output-index]");
+    if (!outputNode) {
+      return;
+    }
+    setHoveredOutputIndex(Number(outputNode.dataset.outputIndex));
+  });
+  dom.fftSvg.addEventListener("mouseleave", () => {
+    setHoveredOutputIndex(null);
+  });
+  if (dom.frequencyOutputBody) {
+    dom.frequencyOutputBody.addEventListener("mouseover", (event) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+      const row = event.target.closest("tr[data-output-index]");
+      if (!row) {
+        return;
+      }
+      setHoveredOutputIndex(Number(row.dataset.outputIndex));
+    });
+    dom.frequencyOutputBody.addEventListener("mouseleave", () => {
+      setHoveredOutputIndex(null);
+    });
   }
-  if (dom.polyLoadButton) {
-    dom.polyLoadButton.addEventListener("click", loadPolynomialIntoVisualizer);
-  }
-
   dom.historyBody.addEventListener("click", (event) => {
     const row = event.target.closest("tr[data-step-index]");
     if (!row) {
